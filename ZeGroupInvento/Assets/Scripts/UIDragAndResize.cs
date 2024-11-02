@@ -228,7 +228,7 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
     {
         if (activeTouches.Count == 0) return;
 
-        // Si au moins un touch est sur une poignée de resize, on ne fait pas de déplacement
+        // Vérifier si on est en train de redimensionner
         bool isResizing = false;
         foreach (var touchInfo in activeTouches.Values)
         {
@@ -259,15 +259,27 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
             // Calculer le mouvement dans l'espace du canvas
             Vector2 movement = screenCenterPoint - screenLastCenterPoint;
 
-            // Appliquer le mouvement avec les limites du parent
+            // Calculer les dimensions de la boîte englobante après rotation
+            float currentRotation = rectTransform.rotation.eulerAngles.z * Mathf.Deg2Rad;
+            float cos = Mathf.Abs(Mathf.Cos(currentRotation));
+            float sin = Mathf.Abs(Mathf.Sin(currentRotation));
+
+            // Calculer la nouvelle largeur et hauteur de la boîte englobante
+            float width = rectTransform.rect.width;
+            float height = rectTransform.rect.height;
+            float rotatedWidth = width * cos + height * sin;
+            float rotatedHeight = width * sin + height * cos;
+
+            // Appliquer le mouvement avec les limites du parent en utilisant la boîte englobante rotative
             Vector2 proposedPosition = rectTransform.anchoredPosition + movement;
-            float halfWidth = rectTransform.rect.width / 2;
-            float halfHeight = rectTransform.rect.height / 2;
+            float halfRotatedWidth = rotatedWidth / 2;
+            float halfRotatedHeight = rotatedHeight / 2;
             float parentHalfWidth = parentRectTransform.rect.width / 2;
             float parentHalfHeight = parentRectTransform.rect.height / 2;
 
-            proposedPosition.x = Mathf.Clamp(proposedPosition.x, -parentHalfWidth + halfWidth, parentHalfWidth - halfWidth);
-            proposedPosition.y = Mathf.Clamp(proposedPosition.y, -parentHalfHeight + halfHeight, parentHalfHeight - halfHeight);
+            // Appliquer les contraintes avec la boîte englobante rotative
+            proposedPosition.x = Mathf.Clamp(proposedPosition.x, -parentHalfWidth + halfRotatedWidth, parentHalfWidth - halfRotatedWidth);
+            proposedPosition.y = Mathf.Clamp(proposedPosition.y, -parentHalfHeight + halfRotatedHeight, parentHalfHeight - halfRotatedHeight);
 
             rectTransform.anchoredPosition = proposedPosition;
             lastCenterPoint = centerPoint;
