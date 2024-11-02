@@ -12,6 +12,7 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
     [SerializeField] private float pinchThresholdUpgrade = 1.5f;
     [SerializeField] private float pinchThresholdDowngrade = 0.6f;
     [SerializeField] private float rotationSensitivity = 1f;
+    [SerializeField] private float longPressThreshold = 0.8f;
 
     [Header("State")]
     private bool isResizable = true;
@@ -25,6 +26,13 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
     private RectTransform parentRectTransform;
     private Canvas canvas;
     private MenuManager menuManager;
+
+    // Variables pour la gestion du long press
+    private bool isLongPressing = false;
+    private float longPressTimer = 0f;
+    private int longPressTouchId = -1;
+    private Vector2 longPressStartPosition;
+    private const float maxMoveDistanceForLongPress = 20f;
 
     // Structure pour stocker les informations de touch
     private class TouchInfo
@@ -86,11 +94,130 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
         }
     }
 
-    void Update()
+    private void Update()
     {
         HandleMultiTouch();
+        HandleLongPress();
     }
 
+    private void HandleLongPress()
+    {
+        // Ne gérer le long press que s'il n'y a qu'un seul touch
+        if (Input.touchCount == 1)
+        {
+            Touch touch = Input.GetTouch(0);
+
+            switch (touch.phase)
+            {
+                case TouchPhase.Began:
+                    // Démarrer le long press uniquement si le touch commence sur l'objet
+                    if (IsPointerOverGameObject(touch.position))
+                    {
+                        StartLongPress(touch);
+                    }
+                    break;
+
+                case TouchPhase.Moved:
+                    // Vérifier si le doigt n'a pas trop bougé pendant le long press
+                    if (isLongPressing && touch.fingerId == longPressTouchId)
+                    {
+                        float distance = Vector2.Distance(touch.position, longPressStartPosition);
+                        if (distance > maxMoveDistanceForLongPress)
+                        {
+                            CancelLongPress();
+                        }
+                    }
+                    break;
+
+                case TouchPhase.Ended:
+                case TouchPhase.Canceled:
+                    if (touch.fingerId == longPressTouchId)
+                    {
+                        CancelLongPress();
+                    }
+                    break;
+            }
+
+            // Mettre à jour le timer si nous sommes en long press
+            if (isLongPressing && touch.fingerId == longPressTouchId)
+            {
+                longPressTimer += Time.deltaTime;
+                if (longPressTimer >= longPressThreshold)
+                {
+                    DeleteObject();
+                }
+            }
+        }
+        else
+        {
+            // Annuler le long press si plus d'un doigt sur l'écran
+            CancelLongPress();
+        }
+    }
+
+    private bool IsPointerOverGameObject(Vector2 position)
+    {
+        // Créer un PointerEventData avec la position du touch
+        PointerEventData eventDataCurrentPosition = new PointerEventData(EventSystem.current);
+        eventDataCurrentPosition.position = position;
+
+        // Créer une liste pour stocker les résultats
+        List<RaycastResult> results = new List<RaycastResult>();
+
+        // Raycast sur tous les éléments UI à cette position
+        EventSystem.current.RaycastAll(eventDataCurrentPosition, results);
+
+        // Vérifier si notre objet est le premier touché
+        foreach (RaycastResult result in results)
+        {
+            if (result.gameObject == gameObject)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void StartLongPress(Touch touch)
+    {
+        isLongPressing = true;
+        longPressTimer = 0f;
+        longPressTouchId = touch.fingerId;
+        longPressStartPosition = touch.position;
+    }
+
+    private void CancelLongPress()
+    {
+        isLongPressing = false;
+        longPressTimer = 0f;
+        longPressTouchId = -1;
+    }
+
+    private void DeleteObject()
+    {
+        // Animation de suppression
+        StartCoroutine(DeleteWithFeedback());
+    }
+
+    private System.Collections.IEnumerator DeleteWithFeedback()
+    {
+        // Animation de scale qui rétrécit
+        float duration = 0.3f;
+        float elapsed = 0f;
+        Vector3 startScale = transform.localScale;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float progress = elapsed / duration;
+            transform.localScale = Vector3.Lerp(startScale, Vector3.zero, progress);
+            yield return null;
+        }
+
+        // Suppression de l'objet
+        Destroy(gameObject);
+    }
     private void HandleMultiTouch()
     {
         // Gérer les nouveaux touches
