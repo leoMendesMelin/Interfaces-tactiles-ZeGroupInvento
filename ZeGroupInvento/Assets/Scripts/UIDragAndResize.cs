@@ -172,19 +172,10 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
 
     private void StartLongPress(Touch touch)
     {
-        // Vérifier que le touch est dans la zone centrale (pas sur les poignées)
-        Vector2 localPoint;
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, touch.position, null, out localPoint))
-        {
-            DragHandle handle = GetHandleAtPosition(touch.position);
-            if (handle == DragHandle.None) // Seulement si on n'est pas sur une poignée
-            {
-                isLongPressing = true;
-                longPressTimer = 0f;
-                longPressTouchId = touch.fingerId;
-                longPressStartPosition = touch.position;
-            }
-        }
+        isLongPressing = true;
+        longPressTimer = 0f;
+        longPressTouchId = touch.fingerId;
+        longPressStartPosition = touch.position;
     }
 
     private void CancelLongPress()
