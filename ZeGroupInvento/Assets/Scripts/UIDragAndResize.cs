@@ -102,56 +102,47 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
 
     private void HandleLongPress()
     {
-        // Ne gérer le long press que s'il n'y a qu'un seul touch
-        if (Input.touchCount == 1)
+        // Parcourir tous les touches pour trouver notre long press touch
+        for (int i = 0; i < Input.touchCount; i++)
         {
-            Touch touch = Input.GetTouch(0);
+            Touch touch = Input.GetTouch(i);
 
-            switch (touch.phase)
+            // Si c'est notre touch de long press
+            if (touch.fingerId == longPressTouchId)
             {
-                case TouchPhase.Began:
-                    // Démarrer le long press uniquement si le touch commence sur l'objet
-                    if (IsPointerOverGameObject(touch.position))
-                    {
-                        StartLongPress(touch);
-                    }
-                    break;
-
-                case TouchPhase.Moved:
-                    // Vérifier si le doigt n'a pas trop bougé pendant le long press
-                    if (isLongPressing && touch.fingerId == longPressTouchId)
-                    {
-                        float distance = Vector2.Distance(touch.position, longPressStartPosition);
-                        if (distance > maxMoveDistanceForLongPress)
-                        {
-                            CancelLongPress();
-                        }
-                    }
-                    break;
-
-                case TouchPhase.Ended:
-                case TouchPhase.Canceled:
-                    if (touch.fingerId == longPressTouchId)
+                // Vérifier si le doigt n'a pas trop bougé pendant le long press
+                if (isLongPressing)
+                {
+                    float distance = Vector2.Distance(touch.position, longPressStartPosition);
+                    if (distance > maxMoveDistanceForLongPress)
                     {
                         CancelLongPress();
                     }
-                    break;
-            }
+                    else
+                    {
+                        // Mettre à jour le timer si le doigt est resté stable
+                        longPressTimer += Time.deltaTime;
+                        if (longPressTimer >= longPressThreshold)
+                        {
+                            DeleteObject();
+                        }
+                    }
+                }
 
-            // Mettre à jour le timer si nous sommes en long press
-            if (isLongPressing && touch.fingerId == longPressTouchId)
-            {
-                longPressTimer += Time.deltaTime;
-                if (longPressTimer >= longPressThreshold)
+                // Gérer la fin du touch
+                if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
                 {
-                    DeleteObject();
+                    CancelLongPress();
                 }
             }
-        }
-        else
-        {
-            // Annuler le long press si plus d'un doigt sur l'écran
-            CancelLongPress();
+            // Si c'est un nouveau touch et qu'on n'a pas de long press en cours
+            else if (touch.phase == TouchPhase.Began && !isLongPressing)
+            {
+                if (IsPointerOverGameObject(touch.position))
+                {
+                    StartLongPress(touch);
+                }
+            }
         }
     }
 
@@ -181,10 +172,19 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
 
     private void StartLongPress(Touch touch)
     {
-        isLongPressing = true;
-        longPressTimer = 0f;
-        longPressTouchId = touch.fingerId;
-        longPressStartPosition = touch.position;
+        // Vérifier que le touch est dans la zone centrale (pas sur les poignées)
+        Vector2 localPoint;
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, touch.position, null, out localPoint))
+        {
+            DragHandle handle = GetHandleAtPosition(touch.position);
+            if (handle == DragHandle.None) // Seulement si on n'est pas sur une poignée
+            {
+                isLongPressing = true;
+                longPressTimer = 0f;
+                longPressTouchId = touch.fingerId;
+                longPressStartPosition = touch.position;
+            }
+        }
     }
 
     private void CancelLongPress()
