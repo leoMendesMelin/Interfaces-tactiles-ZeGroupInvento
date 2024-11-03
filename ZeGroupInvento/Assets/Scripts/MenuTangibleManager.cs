@@ -16,6 +16,7 @@ public class TangibleMenuManager : MonoBehaviour
 
     private GameObject currentActiveMenu;
     private Canvas parentCanvas;
+    private Vector2 menuPosition;
 
     // Variables pour le système de détection de double tap
     private float lastTapTime;
@@ -78,13 +79,47 @@ public class TangibleMenuManager : MonoBehaviour
 
             if (timeSinceLastTap <= doubleTapTimeThreshold && distanceFromLastTap <= tapDistanceThreshold)
             {
-                // Double tap détecté
-                ShowMenuGlobalAtPosition(tapPosition);
+                // Vérifier si le double tap est sur le menu existant
+                if (currentActiveMenu != null && IsPositionOverMenu(tapPosition))
+                {
+                    HideMenu();
+                }
+                else
+                {
+                    // Double tap en dehors du menu -> afficher nouveau menu
+                    ShowMenuGlobalAtPosition(tapPosition);
+                }
             }
 
             // Réinitialiser après le second tap
             readyForSecondTap = false;
         }
+    }
+
+    private bool IsPositionOverMenu(Vector2 screenPosition)
+    {
+        if (currentActiveMenu == null) return false;
+
+        RectTransform menuRect = currentActiveMenu.GetComponent<RectTransform>();
+        Vector2 localPoint;
+
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            menuRect,
+            screenPosition,
+            parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : parentCanvas.worldCamera,
+            out localPoint))
+        {
+            // Convertir le point local en coordonnées relatives à la RectTransform
+            Vector2 normalizedPoint = new Vector2(
+                (localPoint.x + menuRect.rect.width * 0.5f) / menuRect.rect.width,
+                (localPoint.y + menuRect.rect.height * 0.5f) / menuRect.rect.height
+            );
+
+            return normalizedPoint.x >= 0 && normalizedPoint.x <= 1 &&
+                   normalizedPoint.y >= 0 && normalizedPoint.y <= 1;
+        }
+
+        return false;
     }
 
     private void ShowMenuGlobalAtPosition(Vector2 screenPosition)
@@ -95,6 +130,7 @@ public class TangibleMenuManager : MonoBehaviour
         }
 
         currentActiveMenu = Instantiate(tangibleMenuGlobal, transform);
+        menuPosition = screenPosition;
         PositionMenuAtScreenPoint(currentActiveMenu, screenPosition);
     }
 
