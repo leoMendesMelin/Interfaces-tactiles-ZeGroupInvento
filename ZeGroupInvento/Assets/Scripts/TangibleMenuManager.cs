@@ -9,6 +9,8 @@ public class TangibleMenuManager : MonoBehaviour
     [SerializeField] private GameObject tangibleMenuSubMenu;
     [SerializeField] private GameObject tangibleMenuSubMenuFirstSelected;
     [SerializeField] private GameObject tangibleMenuSubMenuSecondSelected;
+    [SerializeField] private GameObject gVerticalPrefab; // Nouveau prefab GVertical
+    [SerializeField] private GameObject gHorizontalPrefab; //
 
     [Header("Double Tap Settings")]
     [SerializeField] private float doubleTapTimeThreshold = 0.3f;
@@ -16,6 +18,7 @@ public class TangibleMenuManager : MonoBehaviour
 
     private GameObject currentActiveMenu;
     private Canvas parentCanvas;
+
     private Vector2 menuPosition;
 
     // Variables pour le système de détection de double tap
@@ -23,6 +26,7 @@ public class TangibleMenuManager : MonoBehaviour
     private Vector2 lastTapPosition;
     private bool readyForSecondTap;
     private bool isProcessingTouch;
+    private GameObject currentGuidelinePrefab; // Pour stocker le prefab actif
 
     // État actuel du menu
     private enum MenuState
@@ -131,12 +135,16 @@ public class TangibleMenuManager : MonoBehaviour
         Debug.Log("GVertical clicked, current state: " + currentState);
         if (currentState == MenuState.Guidelines)
         {
+            // Afficher le menu FirstSelected
             ShowSubMenuFirstSelected();
+            // Afficher le prefab GVertical au centre
+            ShowGuidelineAtCenter(gVerticalPrefab);
             currentState = MenuState.GVertical;
         }
-        else if (currentState == MenuState.GHorizontal) // Ajout de cette condition
+        else if (currentState == MenuState.GHorizontal)
         {
             ShowSubMenuFirstSelected();
+            ShowGuidelineAtCenter(gVerticalPrefab);
             currentState = MenuState.GVertical;
         }
     }
@@ -146,14 +154,35 @@ public class TangibleMenuManager : MonoBehaviour
         Debug.Log("GHorizontal clicked, current state: " + currentState);
         if (currentState == MenuState.Guidelines)
         {
+            // Afficher le menu SecondSelected
             ShowSubMenuSecondSelected();
+            // Afficher le prefab GHorizontal au centre
+            ShowGuidelineAtCenter(gHorizontalPrefab);
             currentState = MenuState.GHorizontal;
         }
-        else if (currentState == MenuState.GVertical) // Ajout de cette condition
+        else if (currentState == MenuState.GVertical)
         {
             ShowSubMenuSecondSelected();
+            ShowGuidelineAtCenter(gHorizontalPrefab);
             currentState = MenuState.GHorizontal;
         }
+    }
+
+    private void ShowGuidelineAtCenter(GameObject prefab)
+    {
+        // Détruire l'ancien prefab s'il existe
+        if (currentGuidelinePrefab != null)
+        {
+            Destroy(currentGuidelinePrefab);
+        }
+
+        // Créer le nouveau prefab au centre de l'écran
+        currentGuidelinePrefab = Instantiate(prefab, transform);
+        RectTransform rectTransform = currentGuidelinePrefab.GetComponent<RectTransform>();
+        rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        rectTransform.anchoredPosition = Vector2.zero; // Position au centre
     }
 
     private void ProcessTap(Vector2 tapPosition)
@@ -305,10 +334,13 @@ public class TangibleMenuManager : MonoBehaviour
             currentActiveMenu = null;
         }
 
-        // Réinitialiser l'état du menu
-        currentState = MenuState.Global;
+        if (currentGuidelinePrefab != null)
+        {
+            Destroy(currentGuidelinePrefab);
+            currentGuidelinePrefab = null;
+        }
 
-        // Réinitialiser l'état du double tap
+        currentState = MenuState.Global;
         readyForSecondTap = false;
         lastTapTime = -doubleTapTimeThreshold;
     }
