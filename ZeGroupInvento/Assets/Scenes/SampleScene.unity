@@ -193,9 +193,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   handleSize: 40
+  cornerSize: 40
   minPinchDistance: 50
   pinchThresholdUpgrade: 1.5
   pinchThresholdDowngrade: 0.6
+  rotationSensitivity: 1
+  longPressThreshold: 0.8
 --- !u!1 &495592097
 GameObject:
   m_ObjectHideFlags: 0
@@ -627,14 +630,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.392}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 0
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 8e0ef5c957e9ba84c9d7e3277319d521, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 0ca5eab78185b184685232afbdb820e3, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
