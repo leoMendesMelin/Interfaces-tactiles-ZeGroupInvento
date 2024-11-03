@@ -34,6 +34,8 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
     private Vector2 longPressStartPosition;
     private const float maxMoveDistanceForLongPress = 20f;
 
+    private UIDragAndResize dragAndResizeScript;
+
     // Structure pour stocker les informations de touch
     private class TouchInfo
     {

@@ -1,746 +1,731 @@
 using UnityEngine;
 using UnityEngine.UI;
-using System.Collections.Generic;
 using UnityEngine.EventSystems;
-
+using System.Collections.Generic;
 using System.Linq;
 
 public class StickyGuidelineSystem : MonoBehaviour
 {
-    [Header("Snap Settings")]
-    [SerializeField] private float snapThreshold = 10f;
-    [SerializeField] private bool enableSnapping = true;
-
-    [Header("Visual Feedback")]
-    [SerializeField] private Color stickyHighlightColor = new Color(0, 1, 0, 0.3f);
-    [SerializeField] private float highlightDuration = 0.3f;
+    [Header("Settings")]
+    [SerializeField] private float snapThreshold = 30f;
+    [SerializeField] private Color stickyColor = new Color(0, 1, 0, 0.5f);
+    [SerializeField] private Color previewColor = new Color(0, 1, 0, 0.3f); // Couleur plus légère pour le preview
 
     private Canvas parentCanvas;
-    private Dictionary<int, GuidelineTouch> activeTouches = new Dictionary<int, GuidelineTouch>();
-    private Dictionary<GameObject, int> guidelineToTouchId = new Dictionary<GameObject, int>();
-    private Dictionary<GameObject, HashSet<GameObject>> stickyObjects = new Dictionary<GameObject, HashSet<GameObject>>();
+    private Dictionary<GameObject, HashSet<GameObject>> attachedObjects = new Dictionary<GameObject, HashSet<GameObject>>();
     private Dictionary<GameObject, Color> originalColors = new Dictionary<GameObject, Color>();
+    private GameObject draggedObject;
+    private RectTransform draggedRect;
+    private Vector2 dragStartPosition;
+    private Vector2 dragOffset;
+    private Camera canvasCamera;
+    private GameObject currentSnapGuide = null;
+    private bool isSnapping = false;
 
-
-
-
-    private class GuidelineTouch
-    {
-        public GameObject guideline;
-        public Vector2 initialGuidelinePosition;
-        public Vector2 initialTouchPosition;
-        public Vector2 lastValidPosition;
-        public int touchId;
-    }
+    private float lastSnapCheckTime = 0f;
+    private const float SnapCheckInterval = 0.05f; // Vérifie toutes les 50ms au lieu de chaque frame
+    private GameObject lastNearestGuideline = null;
 
     private void Start()
     {
         parentCanvas = GetComponentInParent<Canvas>();
-        if (parentCanvas == null)
+        if (!parentCanvas)
         {
-            Debug.LogError("Canvas non trouvé!");
+            Debug.LogError("StickyGuidelineSystem: Canvas not found!");
+            enabled = false;
+            return;
         }
-    }
 
+        canvasCamera = parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : parentCanvas.worldCamera;
+    }
 
     private void Update()
     {
         if (Input.touchCount > 0)
         {
-            foreach (Touch touch in Input.touches)
-            {
-                // Vérifier si le touch est utilisé pour le redimensionnement
-                if (IsResizing(touch))
-                {
-                    continue; // Ignorer ce touch s'il est utilisé pour le redimensionnement
-                }
-
-                switch (touch.phase)
-                {
-                    case TouchPhase.Began:
-                        TryStartDrag(touch.fingerId, touch.position);
-                        break;
-
-                    case TouchPhase.Moved:
-                        if (activeTouches.ContainsKey(touch.fingerId))
-                        {
-                            if (guidelineToTouchId.ContainsValue(touch.fingerId))
-                            {
-                                ContinueDrag(touch.fingerId, touch.position);
-                            }
-                            else
-                            {
-                                ContinueObjectDrag(touch.fingerId, touch.position);
-                            }
-                        }
-                        break;
-
-                    case TouchPhase.Ended:
-                    case TouchPhase.Canceled:
-                        if (activeTouches.ContainsKey(touch.fingerId))
-                        {
-                            EndDrag(touch.fingerId);
-                        }
-                        break;
-                }
-            }
+            Touch touch = Input.GetTouch(0);
+            HandleInput(touch.position, touch.phase);
         }
-
-#if UNITY_EDITOR
-        if (!IsMouseResizing()) // Nouvelle vérification pour la souris
+        else if (Input.GetMouseButton(0) || Input.GetMouseButtonDown(0) || Input.GetMouseButtonUp(0))
         {
-            if (Input.GetMouseButtonDown(0))
-            {
-                TryStartDrag(-1, Input.mousePosition);
-            }
-            else if (Input.GetMouseButton(0) && activeTouches.ContainsKey(-1))
-            {
-                if (guidelineToTouchId.ContainsValue(-1))
+            HandleInput(Input.mousePosition,
+                Input.GetMouseButtonDown(0) ? TouchPhase.Began :
+                Input.GetMouseButtonUp(0) ? TouchPhase.Ended :
+                TouchPhase.Moved);
+        }
+    }
+
+
+    private void HandleInput(Vector2 position, TouchPhase phase)
+    {
+        switch (phase)
+        {
+            case TouchPhase.Began:
+                BeginDrag(position);
+                break;
+            case TouchPhase.Moved:
+                if (draggedObject != null)
                 {
-                    ContinueDrag(-1, Input.mousePosition);
+                    if (draggedObject.CompareTag("Draggable"))
+                    {
+                        HandleDraggableMovement(position);
+                    }
+                    else
+                    {
+                        // Pour les guidelines
+                        DragObject(position);
+                    }
+                }
+                break;
+            case TouchPhase.Ended:
+                FinalizeSnapping();
+                EndDrag();
+                break;
+        }
+    }
+
+    private GameObject FindNearestGuideline(Vector2 position, out bool shouldSnap, out Vector2 snappedPosition)
+    {
+        shouldSnap = false;
+        snappedPosition = position;
+        GameObject nearestGuideline = null;
+        float nearestDistance = float.MaxValue;
+
+        var guidelines = FindObjectsOfType<RectTransform>()
+            .Where(rt => rt.gameObject != null &&
+                   (rt.gameObject.name.Contains("GVertical") || rt.gameObject.name.Contains("GHorizontal")));
+
+        foreach (var guidelineRect in guidelines)
+        {
+            if (!guidelineRect) continue;
+
+            bool isVertical = guidelineRect.gameObject.name.Contains("GVertical");
+            float distance = isVertical ?
+                Mathf.Abs(position.x - guidelineRect.anchoredPosition.x) :
+                Mathf.Abs(position.y - guidelineRect.anchoredPosition.y);
+
+            if (distance < snapThreshold && distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestGuideline = guidelineRect.gameObject;
+
+                Vector2 snapped = position;
+                if (isVertical)
+                {
+                    snapped.x = guidelineRect.anchoredPosition.x;
                 }
                 else
                 {
-                    ContinueObjectDrag(-1, Input.mousePosition);
+                    snapped.y = guidelineRect.anchoredPosition.y;
                 }
-            }
-            else if (Input.GetMouseButtonUp(0))
-            {
-                EndDrag(-1);
-            }
-        }
-#endif
-    }
-
-    private bool IsResizing(Touch touch)
-    {
-        PointerEventData pointerData = new PointerEventData(EventSystem.current)
-        {
-            position = touch.position
-        };
-
-        List<RaycastResult> results = new List<RaycastResult>();
-        EventSystem.current.RaycastAll(pointerData, results);
-
-        foreach (RaycastResult result in results)
-        {
-            UIDragAndResize resizeComponent = result.gameObject.GetComponent<UIDragAndResize>();
-            if (resizeComponent != null)
-            {
-                // Vérifier si le touch est sur une poignée de redimensionnement
-                // Cette vérification dépend de l'implémentation de UIDragAndResize
-                return true;
+                snappedPosition = snapped;
+                shouldSnap = true;
             }
         }
 
-        return false;
+        return nearestGuideline;
     }
 
-    private bool IsMouseResizing()
+
+    private void HandleDraggableMovement(Vector2 screenPosition)
     {
-        PointerEventData pointerData = new PointerEventData(EventSystem.current)
-        {
-            position = Input.mousePosition
-        };
-
-        List<RaycastResult> results = new List<RaycastResult>();
-        EventSystem.current.RaycastAll(pointerData, results);
-
-        foreach (RaycastResult result in results)
-        {
-            UIDragAndResize resizeComponent = result.gameObject.GetComponent<UIDragAndResize>();
-            if (resizeComponent != null)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private void OnDestroy()
-    {
-        // Nettoyer les références et rétablir les couleurs originales
-        foreach (var kvp in originalColors)
-        {
-            if (kvp.Key != null)
-            {
-                Image image = kvp.Key.GetComponent<Image>();
-                if (image != null)
-                {
-                    image.color = kvp.Value;
-                }
-            }
-        }
-        originalColors.Clear();
-        stickyObjects.Clear();
-        activeTouches.Clear();
-        guidelineToTouchId.Clear();
-    }
-
-    public void OnObjectDestroyed(GameObject obj)
-    {
-        if (obj == null) return;
-
-        // Parcourir toutes les guidelines et retirer l'objet de leurs listes
-        foreach (var kvp in stickyObjects.ToList())
-        {
-            if (kvp.Value.Contains(obj))
-            {
-                kvp.Value.Remove(obj);
-
-                // Si la guideline n'a plus d'objets, réinitialiser sa couleur
-                if (kvp.Value.Count == 0 && kvp.Key != null)
-                {
-                    ResetVisualEffect(kvp.Key);
-                }
-            }
-        }
-
-        // Nettoyer les autres références si nécessaire
-        if (originalColors.ContainsKey(obj))
-        {
-            originalColors.Remove(obj);
-        }
-    }
-
-    public void OnGuidelineDestroyed(GameObject guideline)
-    {
-        if (guideline == null) return;
-
-        // Détacher tous les objets en premier
-        DetachAllObjectsFromGuideline(guideline);
-
-        // Nettoyer les autres références
-        if (guidelineToTouchId.ContainsKey(guideline))
-        {
-            guidelineToTouchId.Remove(guideline);
-        }
-
-        // Nettoyer les touches associées
-        List<int> touchesToRemove = new List<int>();
-        foreach (var kvp in activeTouches)
-        {
-            if (kvp.Value.guideline == guideline)
-            {
-                touchesToRemove.Add(kvp.Key);
-            }
-        }
-        foreach (int touchId in touchesToRemove)
-        {
-            activeTouches.Remove(touchId);
-        }
-
-        // Réinitialiser la couleur si nécessaire
-        ResetVisualEffect(guideline);
-    }
-
-    private void UpdateStickyObjectPosition(GameObject obj, GameObject guideline)
-    {
-        RectTransform objRect = obj.GetComponent<RectTransform>();
-        RectTransform guideRect = guideline.GetComponent<RectTransform>();
-        Vector2 newPos = objRect.anchoredPosition;
-
-        if (guideline.name.StartsWith("GVertical"))
-        {
-            newPos.x = guideRect.anchoredPosition.x;
-        }
-        else if (guideline.name.StartsWith("GHorizontal"))
-        {
-            newPos.y = guideRect.anchoredPosition.y;
-        }
-
-        objRect.anchoredPosition = newPos;
-    }
-
-    // Méthode utile pour le debug
-    private void OnDrawGizmos()
-    {
-        if (!Application.isPlaying) return;
-
-        // Visualiser les connexions sticky
-        foreach (var kvp in stickyObjects)
-        {
-            if (kvp.Key == null) continue;
-
-            Vector3 guidelinePos = kvp.Key.transform.position;
-            Gizmos.color = Color.green;
-
-            foreach (var obj in kvp.Value)
-            {
-                if (obj == null) continue;
-                Gizmos.DrawLine(guidelinePos, obj.transform.position);
-            }
-        }
-    }
-
-    private GameObject FindObjectUnderTouch(Vector2 screenPosition)
-    {
-        GameObject guideline = FindGuidelineUnderTouch(screenPosition);
-        if (guideline != null) return guideline;
-
-        GraphicRaycaster raycaster = parentCanvas.GetComponent<GraphicRaycaster>();
-        PointerEventData pointerData = new PointerEventData(EventSystem.current)
-        {
-            position = screenPosition
-        };
-
-        List<RaycastResult> results = new List<RaycastResult>();
-        raycaster.Raycast(pointerData, results);
-
-        foreach (RaycastResult result in results)
-        {
-            if (result.gameObject.CompareTag("Draggable"))
-            {
-                return result.gameObject;
-            }
-        }
-
-        return null;
-    }
-
-    private void AddStickyObject(GameObject obj, GameObject guideline)
-    {
-        if (obj == null || guideline == null) return;
-
-        if (!stickyObjects.ContainsKey(guideline))
-        {
-            stickyObjects[guideline] = new HashSet<GameObject>();
-        }
-
-        // Ajouter l'objet s'il n'est pas déjà attaché
-        if (!stickyObjects[guideline].Contains(obj))
-        {
-            stickyObjects[guideline].Add(obj);
-
-            // Aligner initialement l'objet avec la guideline
-            RectTransform objRect = obj.GetComponent<RectTransform>();
-            RectTransform guideRect = guideline.GetComponent<RectTransform>();
-
-            if (objRect != null && guideRect != null)
-            {
-                Vector2 pos = objRect.anchoredPosition;
-                if (guideline.name.StartsWith("GVertical"))
-                {
-                    pos.x = guideRect.anchoredPosition.x;
-                }
-                else if (guideline.name.StartsWith("GHorizontal"))
-                {
-                    pos.y = guideRect.anchoredPosition.y;
-                }
-                objRect.anchoredPosition = pos;
-            }
-        }
-    }
-
-    private GameObject FindNearestGuideline(Vector2 position, bool vertical)
-    {
-        // Chercher toutes les guidelines (en fonction du nom au lieu du tag)
-        GameObject[] allObjects = GameObject.FindObjectsOfType<GameObject>();
-        GameObject nearest = null;
-        float minDistance = snapThreshold;
-
-        foreach (GameObject obj in allObjects)
-        {
-            // Vérifier si c'est une guideline du bon type
-            bool isVerticalGuide = obj.name.StartsWith("GVertical");
-            bool isHorizontalGuide = obj.name.StartsWith("GHorizontal");
-
-            if ((vertical && isVerticalGuide) || (!vertical && isHorizontalGuide))
-            {
-                RectTransform guideRect = obj.GetComponent<RectTransform>();
-                if (guideRect == null) continue;
-
-                float distance = vertical ?
-                    Mathf.Abs(position.x - guideRect.anchoredPosition.x) :
-                    Mathf.Abs(position.y - guideRect.anchoredPosition.y);
-
-                if (distance < minDistance)
-                {
-                    minDistance = distance;
-                    nearest = obj;
-                }
-            }
-        }
-
-        return nearest;
-    }
-
-    private void ContinueObjectDrag(int touchId, Vector2 screenPosition)
-    {
-        if (!activeTouches.ContainsKey(touchId)) return;
-
-        GuidelineTouch touch = activeTouches[touchId];
-        RectTransform objectRect = touch.guideline.GetComponent<RectTransform>();
-        RectTransform canvasRect = parentCanvas.GetComponent<RectTransform>();
-
-        Vector2 currentTouchPositionInCanvas;
+        Vector2 localPoint;
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            canvasRect,
+            parentCanvas.GetComponent<RectTransform>(),
             screenPosition,
-            parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : parentCanvas.worldCamera,
-            out currentTouchPositionInCanvas))
+            canvasCamera,
+            out localPoint))
         {
-            Vector2 touchDelta = currentTouchPositionInCanvas - touch.initialTouchPosition;
-            Vector2 newPosition = touch.initialGuidelinePosition + touchDelta;
+            Vector2 newPosition = localPoint + dragOffset;
 
-            // Vérifier le snap aux guidelines
-            GameObject nearestVertical = FindNearestGuideline(newPosition, true);
-            GameObject nearestHorizontal = FindNearestGuideline(newPosition, false);
+            // Vérifie le snap seulement si suffisamment de temps s'est écoulé
+            bool shouldCheckSnap = Time.time - lastSnapCheckTime >= SnapCheckInterval;
+            GameObject nearestGuideline = null;
+            bool shouldSnap = false;
+            Vector2 snappedPosition = newPosition;
 
-            // Détacher des guidelines si trop loin
-            CheckAndDetachFromGuidelines(touch.guideline, newPosition);
-
-            bool wasSnapped = false;
-
-            if (nearestVertical != null)
+            if (shouldCheckSnap)
             {
-                RectTransform guideRect = nearestVertical.GetComponent<RectTransform>();
-                newPosition.x = guideRect.anchoredPosition.x;
-                AddStickyObject(touch.guideline, nearestVertical);
-                ShowSnapEffect(touch.guideline, nearestVertical);
-                wasSnapped = true;
+                nearestGuideline = FindNearestGuideline(newPosition, out shouldSnap, out snappedPosition);
+                lastSnapCheckTime = Time.time;
+                lastNearestGuideline = nearestGuideline;
+            }
+            else
+            {
+                // Utilise le dernier résultat connu
+                nearestGuideline = lastNearestGuideline;
+                if (nearestGuideline != null)
+                {
+                    bool isVertical = nearestGuideline.name.Contains("GVertical");
+                    float distance = isVertical ?
+                        Mathf.Abs(newPosition.x - nearestGuideline.GetComponent<RectTransform>().anchoredPosition.x) :
+                        Mathf.Abs(newPosition.y - nearestGuideline.GetComponent<RectTransform>().anchoredPosition.y);
+
+                    shouldSnap = distance < snapThreshold;
+                    if (shouldSnap)
+                    {
+                        snappedPosition = newPosition;
+                        if (isVertical)
+                            snappedPosition.x = nearestGuideline.GetComponent<RectTransform>().anchoredPosition.x;
+                        else
+                            snappedPosition.y = nearestGuideline.GetComponent<RectTransform>().anchoredPosition.y;
+                    }
+                }
             }
 
-            if (nearestHorizontal != null)
+            // Si on ne déplace pas un objet déjà attaché
+            if (!IsAttached(draggedObject))
             {
-                RectTransform guideRect = nearestHorizontal.GetComponent<RectTransform>();
-                newPosition.y = guideRect.anchoredPosition.y;
-                AddStickyObject(touch.guideline, nearestHorizontal);
-                ShowSnapEffect(touch.guideline, nearestHorizontal);
-                wasSnapped = true;
+                bool isNearGuideline = nearestGuideline != null && shouldSnap;
+
+                if (isNearGuideline && nearestGuideline != currentSnapGuide)
+                {
+                    // Reset l'ancienne guideline si elle existe
+                    if (currentSnapGuide != null && !HasAttachedObjects(currentSnapGuide))
+                    {
+                        var oldGuideImage = currentSnapGuide.GetComponent<Image>();
+                        if (oldGuideImage && originalColors.ContainsKey(currentSnapGuide))
+                        {
+                            oldGuideImage.color = originalColors[currentSnapGuide];
+                        }
+                    }
+
+                    // Applique le preview seulement si on est vraiment proche
+                    var draggedImage = draggedObject.GetComponent<Image>();
+                    var guideImage = nearestGuideline.GetComponent<Image>();
+
+                    if (draggedImage)
+                    {
+                        if (!originalColors.ContainsKey(draggedObject))
+                            originalColors[draggedObject] = draggedImage.color;
+                        draggedImage.color = previewColor;
+                    }
+
+                    if (guideImage && !HasAttachedObjects(nearestGuideline))
+                    {
+                        if (!originalColors.ContainsKey(nearestGuideline))
+                            originalColors[nearestGuideline] = guideImage.color;
+                        guideImage.color = previewColor;
+                    }
+
+                    currentSnapGuide = nearestGuideline;
+                    isSnapping = true;
+                }
+                else if (!isNearGuideline && currentSnapGuide != null)
+                {
+                    // Reset les couleurs quand on s'éloigne
+                    var draggedImage = draggedObject.GetComponent<Image>();
+                    if (draggedImage && originalColors.ContainsKey(draggedObject))
+                    {
+                        draggedImage.color = originalColors[draggedObject];
+                    }
+
+                    if (!HasAttachedObjects(currentSnapGuide))
+                    {
+                        var guideImage = currentSnapGuide.GetComponent<Image>();
+                        if (guideImage && originalColors.ContainsKey(currentSnapGuide))
+                        {
+                            guideImage.color = originalColors[currentSnapGuide];
+                        }
+                    }
+
+                    currentSnapGuide = null;
+                    isSnapping = false;
+                }
             }
 
-            objectRect.anchoredPosition = newPosition;
-            touch.lastValidPosition = newPosition;
-
-            if (!wasSnapped)
-            {
-                ResetVisualEffect(touch.guideline);
-            }
+            // Met à jour la position
+            draggedRect.anchoredPosition = shouldSnap ? snappedPosition : newPosition;
         }
     }
 
-    private void ShowSnapEffect(GameObject obj, GameObject guideline)
+    private bool HasAttachedObjects(GameObject guideline)
     {
-        Image image = obj.GetComponent<Image>();
-        if (image == null) return;
+        return attachedObjects.ContainsKey(guideline) && attachedObjects[guideline].Count > 0;
+    }
 
-        // Sauvegarder la couleur originale
+    private void ResetObjectToOriginalColor(GameObject obj)
+    {
+        if (!obj) return;
+        var image = obj.GetComponent<Image>();
+        if (!image) return;
+
+        // Si l'objet est attaché, garde la couleur sticky
+        if (IsAttached(obj))
+        {
+            image.color = stickyColor;
+        }
+        // Sinon remet la couleur d'origine
+        else if (originalColors.ContainsKey(obj))
+        {
+            image.color = originalColors[obj];
+        }
+    }
+
+
+    private void ApplyPreviewColor(GameObject obj)
+    {
+        if (!obj) return;
+        var image = obj.GetComponent<Image>();
+        if (!image) return;
+
+        // Sauvegarde la couleur originale si pas déjà fait
         if (!originalColors.ContainsKey(obj))
         {
             originalColors[obj] = image.color;
         }
 
-        // Si l'objet est une guideline
-        if (obj.name.StartsWith("GVertical") || obj.name.StartsWith("GHorizontal"))
-        {
-            // Vérifier si la guideline a des objets collés
-            bool hasAttachedObjects = stickyObjects.ContainsKey(obj) && stickyObjects[obj].Count > 0;
+        // Apply preview color
+        image.color = previewColor;
+    }
 
-            // Ne colorer que si elle a des objets collés et n'est pas en cours de déplacement
-            bool isBeingDragged = guidelineToTouchId.ContainsKey(obj);
-            image.color = (hasAttachedObjects && !isBeingDragged) ? stickyHighlightColor : originalColors[obj];
-        }
-        else // Pour les objets normaux
+    private bool IsAttached(GameObject obj)
+    {
+        return attachedObjects.Any(kvp => kvp.Value.Contains(obj) || kvp.Key == obj);
+    }
+
+
+
+    private void FinalizeSnapping()
+    {
+        if (draggedObject != null)
         {
-            bool isSticky = stickyObjects.ContainsKey(guideline) && stickyObjects[guideline].Contains(obj);
-            image.color = isSticky ? stickyHighlightColor : originalColors[obj];
+            if (currentSnapGuide != null && isSnapping)
+            {
+                AttachToGuideline(draggedObject, currentSnapGuide);
+
+                // Applique la couleur sticky seulement lors de l'attachement
+                var draggedImage = draggedObject.GetComponent<Image>();
+                var guideImage = currentSnapGuide.GetComponent<Image>();
+
+                if (draggedImage) draggedImage.color = stickyColor;
+                if (guideImage) guideImage.color = stickyColor;
+            }
+            else
+            {
+                DetachFromAllGuidelines(draggedObject);
+            }
         }
     }
 
-    private void DetachAllObjectsFromGuideline(GameObject guideline)
+    private void ApplyStickyColor(GameObject obj)
     {
-        if (guideline == null || !stickyObjects.ContainsKey(guideline)) return;
+        if (!obj) return;
+        var image = obj.GetComponent<Image>();
+        if (!image) return;
 
-        // Créer une copie de la collection pour éviter les problèmes de modification pendant l'itération
-        var objectsToDetach = new List<GameObject>(stickyObjects[guideline]);
-
-        foreach (GameObject obj in objectsToDetach)
+        if (!originalColors.ContainsKey(obj))
         {
-            if (obj != null)
+            originalColors[obj] = image.color;
+        }
+
+        image.color = stickyColor;
+    }
+
+
+
+    private void BeginDrag(Vector2 screenPosition)
+    {
+        PointerEventData eventData = new PointerEventData(EventSystem.current);
+        eventData.position = screenPosition;
+        List<RaycastResult> results = new List<RaycastResult>();
+        EventSystem.current.RaycastAll(eventData, results);
+
+        foreach (var result in results)
+        {
+            GameObject hitObject = result.gameObject;
+
+            if (hitObject.name.Contains("GVertical") || hitObject.name.Contains("GHorizontal") ||
+                hitObject.CompareTag("Draggable"))
             {
-                // Réinitialiser les effets visuels
-                ResetVisualEffect(obj);
+                draggedObject = hitObject;
+                draggedRect = hitObject.GetComponent<RectTransform>();
+                dragStartPosition = draggedRect.anchoredPosition;
+
+                // Sauvegarde la couleur originale si nécessaire
+                var image = hitObject.GetComponent<Image>();
+                if (image && !originalColors.ContainsKey(hitObject))
+                {
+                    originalColors[hitObject] = image.color;
+                }
+
+                // Si c'est une guideline, s'assure qu'elle garde la bonne couleur
+                if (hitObject.name.Contains("GVertical") || hitObject.name.Contains("GHorizontal"))
+                {
+                    UpdateGuidelineColor(hitObject, HasAttachedObjects(hitObject));
+                }
+
+                Vector2 localPoint;
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    parentCanvas.GetComponent<RectTransform>(),
+                    screenPosition,
+                    canvasCamera,
+                    out localPoint
+                );
+
+                dragOffset = dragStartPosition - localPoint;
+
+                // Si c'est un objet draggable
+                if (hitObject.CompareTag("Draggable"))
+                {
+                    var objImage = image;
+                    if (objImage && !IsAttached(hitObject))
+                    {
+                        objImage.color = originalColors[hitObject];
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+
+
+    private void ResetVisualFeedback(GameObject obj)
+    {
+        if (!obj) return;
+
+        var image = obj.GetComponent<Image>();
+        if (image)
+        {
+            // Vérifie si l'objet est actuellement attaché à une guideline
+            bool isAttachedToAnyGuideline = attachedObjects.Any(kvp =>
+                kvp.Value.Contains(obj) || kvp.Key == obj);
+
+            // Si l'objet est attaché, garde la couleur sticky, sinon remet la couleur d'origine
+            if (isAttachedToAnyGuideline)
+            {
+                image.color = stickyColor;
+            }
+            else if (originalColors.ContainsKey(obj))
+            {
+                image.color = originalColors[obj];
+            }
+        }
+    }
+
+
+    private void DragObject(Vector2 screenPosition)
+    {
+        if (!draggedObject || !draggedRect) return;
+
+        Vector2 localPoint;
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            parentCanvas.GetComponent<RectTransform>(),
+            screenPosition,
+            canvasCamera,
+            out localPoint))
+        {
+            Vector2 newPosition = localPoint + dragOffset;
+
+            if (draggedObject.name.Contains("GVertical") || draggedObject.name.Contains("GHorizontal"))
+            {
+                // Vérifie si la guideline a des objets attachés avant de la déplacer
+                bool hasAttachedObjects = HasAttachedObjects(draggedObject);
+
+                // Met à jour la couleur de la guideline en fonction de son état
+                UpdateGuidelineColor(draggedObject, hasAttachedObjects);
+
+                MoveGuidelineWithAttachedObjects(newPosition);
+            }
+            else if (draggedObject.CompareTag("Draggable"))
+            {
+                CheckForSnapping(newPosition);
+            }
+        }
+    }
+
+    private void UpdateGuidelineColor(GameObject guideline, bool hasAttachedObjects)
+    {
+        if (!guideline) return;
+
+        var guideImage = guideline.GetComponent<Image>();
+        if (!guideImage) return;
+
+        // Sauvegarde la couleur originale si nécessaire
+        if (!originalColors.ContainsKey(guideline))
+        {
+            originalColors[guideline] = guideImage.color;
+        }
+
+        // La guideline reste sticky seulement si elle a des objets attachés
+        guideImage.color = hasAttachedObjects ? stickyColor : originalColors[guideline];
+    }
+
+
+    private void CheckForSnappingPreview(Vector2 newPosition)
+    {
+        if (!draggedRect) return;
+
+        // Reset previous preview
+        if (currentSnapGuide != null)
+        {
+            ResetVisualFeedback(draggedObject);
+            ResetVisualFeedback(currentSnapGuide);
+            currentSnapGuide = null;
+        }
+
+        var guidelines = FindObjectsOfType<RectTransform>()
+            .Where(rt => rt.gameObject != null &&
+                   (rt.gameObject.name.Contains("GVertical") || rt.gameObject.name.Contains("GHorizontal")));
+
+        foreach (var guidelineRect in guidelines)
+        {
+            if (!guidelineRect) continue;
+
+            bool isVertical = guidelineRect.gameObject.name.Contains("GVertical");
+            float distance = isVertical ?
+                Mathf.Abs(newPosition.x - guidelineRect.anchoredPosition.x) :
+                Mathf.Abs(newPosition.y - guidelineRect.anchoredPosition.y);
+
+            if (distance < snapThreshold)
+            {
+                if (isVertical)
+                {
+                    newPosition.x = guidelineRect.anchoredPosition.x;
+                }
+                else
+                {
+                    newPosition.y = guidelineRect.anchoredPosition.y;
+                }
+
+                // Preview the snap
+                PreviewSnap(draggedObject, guidelineRect.gameObject);
+                currentSnapGuide = guidelineRect.gameObject;
+                break;
             }
         }
 
-        // Vider et supprimer la collection
-        stickyObjects[guideline].Clear();
-        stickyObjects.Remove(guideline);
+        draggedRect.anchoredPosition = newPosition;
     }
 
-    private void ResetVisualEffect(GameObject obj)
+    private void PreviewSnap(GameObject obj, GameObject guideline)
     {
-        if (obj == null) return;
+        if (!obj || !guideline) return;
 
-        Image image = obj.GetComponent<Image>();
-        if (image != null && originalColors.ContainsKey(obj))
+        var objImage = obj.GetComponent<Image>();
+        var guideImage = guideline.GetComponent<Image>();
+
+        if (!originalColors.ContainsKey(obj) && objImage)
         {
-            image.color = originalColors[obj];
-            originalColors.Remove(obj);
+            originalColors[obj] = objImage.color;
+        }
+
+        if (!originalColors.ContainsKey(guideline) && guideImage)
+        {
+            originalColors[guideline] = guideImage.color;
+        }
+
+        if (objImage) objImage.color = previewColor;
+        if (guideImage) guideImage.color = previewColor;
+    }
+
+
+    private void MoveGuidelineWithAttachedObjects(Vector2 newPosition)
+    {
+        if (!draggedRect) return;
+
+        bool isVertical = draggedObject.name.Contains("GVertical");
+        draggedRect.anchoredPosition = newPosition;
+
+        if (attachedObjects.TryGetValue(draggedObject, out HashSet<GameObject> objects))
+        {
+            foreach (var obj in objects.ToList())
+            {
+                if (obj == null) continue;
+
+                RectTransform objRect = obj.GetComponent<RectTransform>();
+                if (!objRect) continue;
+
+                Vector2 objPos = objRect.anchoredPosition;
+                if (isVertical)
+                {
+                    objPos.x = newPosition.x;
+                }
+                else
+                {
+                    objPos.y = newPosition.y;
+                }
+                objRect.anchoredPosition = objPos;
+            }
         }
     }
 
 
-    private void CheckAndDetachFromGuidelines(GameObject obj, Vector2 newPosition)
+    private void CheckForSnapping(Vector2 newPosition)
     {
-        if (obj == null) return;
+        if (!draggedRect) return;
 
-        List<GameObject> guidelinesToCheck = new List<GameObject>();
-        List<GameObject> guidelinesToRemove = new List<GameObject>();
+        currentSnapGuide = null;
+        var guidelines = FindObjectsOfType<RectTransform>()
+            .Where(rt => rt.gameObject != null &&
+                   (rt.gameObject.name.Contains("GVertical") || rt.gameObject.name.Contains("GHorizontal")));
 
-        // Collecter toutes les guidelines auxquelles l'objet est attaché
-        foreach (var kvp in stickyObjects)
+        foreach (var guidelineRect in guidelines)
+        {
+            if (!guidelineRect) continue;
+
+            bool isVertical = guidelineRect.gameObject.name.Contains("GVertical");
+            float distance = isVertical ?
+                Mathf.Abs(newPosition.x - guidelineRect.anchoredPosition.x) :
+                Mathf.Abs(newPosition.y - guidelineRect.anchoredPosition.y);
+
+            if (distance < snapThreshold)
+            {
+                if (isVertical)
+                {
+                    newPosition.x = guidelineRect.anchoredPosition.x;
+                }
+                else
+                {
+                    newPosition.y = guidelineRect.anchoredPosition.y;
+                }
+
+                currentSnapGuide = guidelineRect.gameObject;
+                break;
+            }
+        }
+
+        draggedRect.anchoredPosition = newPosition;
+    }
+
+    private void AttachToGuideline(GameObject obj, GameObject guideline)
+    {
+        if (!obj || !guideline) return;
+
+        if (!attachedObjects.ContainsKey(guideline))
+        {
+            attachedObjects[guideline] = new HashSet<GameObject>();
+        }
+
+        if (attachedObjects[guideline].Add(obj))
+        {
+            var image = obj.GetComponent<Image>();
+            if (image && !originalColors.ContainsKey(obj))
+            {
+                originalColors[obj] = image.color;
+            }
+
+            // Met à jour les couleurs avec la couleur sticky
+            var objImage = obj.GetComponent<Image>();
+            var guideImage = guideline.GetComponent<Image>();
+
+            if (objImage) objImage.color = stickyColor;
+            if (guideImage) guideImage.color = stickyColor;
+        }
+    }
+
+    private void DetachFromAllGuidelines(GameObject obj)
+    {
+        if (!obj) return;
+
+        foreach (var kvp in attachedObjects.ToList())
         {
             if (kvp.Key == null)
             {
-                guidelinesToRemove.Add(kvp.Key);
+                attachedObjects.Remove(kvp.Key);
                 continue;
             }
 
-            if (kvp.Value.Contains(obj))
+            if (kvp.Value.Remove(obj))
             {
-                guidelinesToCheck.Add(kvp.Key);
-            }
-        }
-
-        // Nettoyer les guidelines nulles
-        foreach (var guideline in guidelinesToRemove)
-        {
-            stickyObjects.Remove(guideline);
-        }
-
-        foreach (GameObject guideline in guidelinesToCheck)
-        {
-            if (guideline == null) continue;
-
-            RectTransform guideRect = guideline.GetComponent<RectTransform>();
-            if (guideRect == null) continue;
-
-            bool isVertical = guideline.name.StartsWith("GVertical");
-
-            float distance = isVertical ?
-                Mathf.Abs(newPosition.x - guideRect.anchoredPosition.x) :
-                Mathf.Abs(newPosition.y - guideRect.anchoredPosition.y);
-
-            if (distance > snapThreshold)
-            {
-                DetachObjectFromGuideline(obj, guideline);
-            }
-        }
-    }
-
-    private void DetachObjectFromGuideline(GameObject obj, GameObject guideline)
-    {
-        if (obj == null || guideline == null) return;
-
-        if (stickyObjects.ContainsKey(guideline))
-        {
-            stickyObjects[guideline].Remove(obj);
-            ResetVisualEffect(obj);
-
-            if (stickyObjects[guideline].Count == 0)
-            {
-                ResetVisualEffect(guideline);
-            }
-        }
-    }
-
-
-    private void ContinueDrag(int touchId, Vector2 screenPosition)
-    {
-        if (!activeTouches.ContainsKey(touchId)) return;
-
-        GuidelineTouch touch = activeTouches[touchId];
-        if (touch.guideline == null) return;
-
-        RectTransform guidelineRect = touch.guideline.GetComponent<RectTransform>();
-        if (guidelineRect == null) return;
-
-        RectTransform canvasRect = parentCanvas.GetComponent<RectTransform>();
-
-        Vector2 currentTouchPositionInCanvas;
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            canvasRect,
-            screenPosition,
-            parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : parentCanvas.worldCamera,
-            out currentTouchPositionInCanvas))
-        {
-            Vector2 touchDelta = currentTouchPositionInCanvas - touch.initialTouchPosition;
-            Vector2 newPosition = touch.initialGuidelinePosition + touchDelta;
-
-            if (IsPositionWithinCanvas(newPosition, guidelineRect, canvasRect))
-            {
-                // Sauvegarder l'ancienne position pour calculer le mouvement
-                Vector2 oldPosition = guidelineRect.anchoredPosition;
-
-                // Déplacer la guideline
-                guidelineRect.anchoredPosition = newPosition;
-                touch.lastValidPosition = newPosition;
-
-                // Ne mettre à jour que les objets attachés à cette guideline spécifique
-                if (stickyObjects.ContainsKey(touch.guideline))
+                var objImage = obj.GetComponent<Image>();
+                if (objImage && originalColors.ContainsKey(obj))
                 {
-                    foreach (var stickyObject in stickyObjects[touch.guideline].ToList())
+                    objImage.color = originalColors[obj];
+                }
+
+                // Met à jour la couleur de la guideline en fonction de son état actuel
+                if (kvp.Value.Count == 0)
+                {
+                    var guideImage = kvp.Key.GetComponent<Image>();
+                    if (guideImage && originalColors.ContainsKey(kvp.Key))
                     {
-                        if (stickyObject == null) continue;
-
-                        RectTransform stickyRect = stickyObject.GetComponent<RectTransform>();
-                        if (stickyRect == null) continue;
-
-                        // Déplacer l'objet en fonction du type de guideline
-                        Vector2 objectPosition = stickyRect.anchoredPosition;
-                        if (touch.guideline.name.StartsWith("GVertical"))
-                        {
-                            // Pour une guideline verticale, on ne modifie que la position X
-                            objectPosition.x = newPosition.x;
-                        }
-                        else if (touch.guideline.name.StartsWith("GHorizontal"))
-                        {
-                            // Pour une guideline horizontale, on ne modifie que la position Y
-                            objectPosition.y = newPosition.y;
-                        }
-                        stickyRect.anchoredPosition = objectPosition;
+                        guideImage.color = originalColors[kvp.Key];
                     }
                 }
             }
         }
     }
 
-    private void UpdateAttachedObjects(GameObject guideline, Vector2 newPosition)
+
+    private void UpdateVisualFeedback(GameObject obj, bool isAttached)
     {
-        if (guideline == null || !stickyObjects.ContainsKey(guideline)) return;
+        if (!obj) return;
 
-        bool isVertical = guideline.name.StartsWith("GVertical");
-        List<GameObject> objectsToRemove = new List<GameObject>();
+        var image = obj.GetComponent<Image>();
+        if (!image) return;
 
-        foreach (GameObject stickyObject in stickyObjects[guideline])
+        if (!originalColors.ContainsKey(obj))
         {
-            if (stickyObject == null)
+            originalColors[obj] = image.color;
+        }
+
+        image.color = isAttached ? stickyColor : originalColors[obj];
+    }
+
+    private void EndDrag()
+    {
+        if (draggedObject != null)
+        {
+            bool isGuideline = draggedObject.name.Contains("GVertical") || draggedObject.name.Contains("GHorizontal");
+
+            if (isGuideline)
             {
-                objectsToRemove.Add(stickyObject);
+                // Met à jour la couleur de la guideline basée sur son état
+                UpdateGuidelineColor(draggedObject, HasAttachedObjects(draggedObject));
+            }
+            else if (!isSnapping)
+            {
+                ResetObjectToOriginalColor(draggedObject);
+            }
+        }
+
+        draggedObject = null;
+        draggedRect = null;
+        currentSnapGuide = null;
+        isSnapping = false;
+    }
+
+    private void OnDestroy()
+    {
+        foreach (var kvp in originalColors.ToList())
+        {
+            if (kvp.Key != null)
+            {
+                var image = kvp.Key.GetComponent<Image>();
+                if (image != null)
+                {
+                    image.color = kvp.Value;
+                }
+            }
+        }
+
+        attachedObjects.Clear();
+        originalColors.Clear();
+    }
+
+    // Méthode pour détacher manuellement un objet
+    public void DetachObject(GameObject obj)
+    {
+        if (obj != null)
+        {
+            DetachFromAllGuidelines(obj);
+        }
+    }
+
+    // Méthode pour nettoyer les références nulles
+    public void CleanupNullReferences()
+    {
+        foreach (var kvp in attachedObjects.ToList())
+        {
+            if (kvp.Key == null)
+            {
+                attachedObjects.Remove(kvp.Key);
                 continue;
             }
 
-            RectTransform stickyRect = stickyObject.GetComponent<RectTransform>();
-            if (stickyRect == null) continue;
-
-            // Mise à jour de la position
-            Vector2 currentPos = stickyRect.anchoredPosition;
-
-            if (isVertical)
-            {
-                // Pour une guideline verticale, on ne met à jour que la position X
-                currentPos.x = newPosition.x;
-            }
-            else
-            {
-                // Pour une guideline horizontale, on ne met à jour que la position Y
-                currentPos.y = newPosition.y;
-            }
-
-            stickyRect.anchoredPosition = currentPos;
+            kvp.Value.RemoveWhere(obj => obj == null);
         }
-
-        // Nettoyer les objets nuls
-        foreach (var obj in objectsToRemove)
-        {
-            stickyObjects[guideline].Remove(obj);
-        }
-
-        // Mettre à jour l'effet visuel si nécessaire
-        if (stickyObjects[guideline].Count == 0)
-        {
-            ResetVisualEffect(guideline);
-        }
-    }
-
-    private void TryStartDrag(int touchId, Vector2 screenPosition)
-    {
-        GameObject touchedObject = FindObjectUnderTouch(screenPosition);
-
-        if (touchedObject != null)
-        {
-            RectTransform objectRect = touchedObject.GetComponent<RectTransform>();
-            Vector2 touchPositionInCanvas;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                parentCanvas.GetComponent<RectTransform>(),
-                screenPosition,
-                parentCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : parentCanvas.worldCamera,
-                out touchPositionInCanvas
-            );
-
-            GuidelineTouch newTouch = new GuidelineTouch
-            {
-                guideline = touchedObject,
-                initialGuidelinePosition = objectRect.anchoredPosition,
-                initialTouchPosition = touchPositionInCanvas,
-                lastValidPosition = objectRect.anchoredPosition,
-                touchId = touchId
-            };
-
-            activeTouches[touchId] = newTouch;
-
-            if (touchedObject.CompareTag("Guideline"))
-            {
-                guidelineToTouchId[touchedObject] = touchId;
-            }
-        }
-    }
-
-    private void EndDrag(int touchId)
-    {
-        if (activeTouches.ContainsKey(touchId))
-        {
-            GameObject guideline = activeTouches[touchId].guideline;
-            if (guidelineToTouchId.ContainsKey(guideline))
-            {
-                guidelineToTouchId.Remove(guideline);
-            }
-            activeTouches.Remove(touchId);
-        }
-    }
-
-    private bool IsPositionWithinCanvas(Vector2 position, RectTransform objectRect, RectTransform canvasRect)
-    {
-        float halfWidth = objectRect.rect.width * 0.5f;
-        float halfHeight = objectRect.rect.height * 0.5f;
-        float minX = -canvasRect.rect.width * 0.5f + halfWidth;
-        float maxX = canvasRect.rect.width * 0.5f - halfWidth;
-        float minY = -canvasRect.rect.height * 0.5f + halfHeight;
-        float maxY = canvasRect.rect.height * 0.5f - halfHeight;
-
-        return position.x >= minX && position.x <= maxX &&
-               position.y >= minY && position.y <= maxY;
-    }
-
-    private GameObject FindGuidelineUnderTouch(Vector2 screenPosition)
-    {
-        GraphicRaycaster raycaster = parentCanvas.GetComponent<GraphicRaycaster>();
-        PointerEventData pointerData = new PointerEventData(EventSystem.current)
-        {
-            position = screenPosition
-        };
-
-        List<RaycastResult> results = new List<RaycastResult>();
-        raycaster.Raycast(pointerData, results);
-
-        foreach (RaycastResult result in results)
-        {
-            // Vérifier si c'est une guideline (GVertical ou GHorizontal)
-            if (result.gameObject.name.StartsWith("GVertical") ||
-                result.gameObject.name.StartsWith("GHorizontal"))
-            {
-                return result.gameObject;
-            }
-        }
-
-        return null;
-    }
-
-    public void SetSnappingEnabled(bool enabled)
-    {
-        enableSnapping = enabled;
     }
 }
