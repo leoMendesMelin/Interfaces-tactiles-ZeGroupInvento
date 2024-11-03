@@ -199,6 +199,60 @@ MonoBehaviour:
   pinchThresholdDowngrade: 0.6
   rotationSensitivity: 1
   longPressThreshold: 0.8
+--- !u!1 &199537830
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 199537831}
+  - component: {fileID: 199537832}
+  m_Layer: 5
+  m_Name: TangibleMenuManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &199537831
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 199537830}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1063897874}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &199537832
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 199537830}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 08e504df88cc33b4da1da1209fdeabed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  tangibleMenuGlobal: {fileID: 6733689954755021118, guid: cb5a783bdfce07b47b0d5fddd70f06a6, type: 3}
+  tangibleMenuSubMenu: {fileID: 69165918572332055, guid: 96cdc25dddeab1b438fe43ec856aba01, type: 3}
+  tangibleMenuSubMenuFirstSelected: {fileID: 5746695658187258623, guid: f50e0678fc04af74496c58c9bbce5c9b, type: 3}
+  tangibleMenuSubMenuSecondSelected: {fileID: 6244690886992761937, guid: 6cd3226ec7d56374895f596d20d82168, type: 3}
+  doubleTapTimeThreshold: 0.3
+  tapDistanceThreshold: 50
 --- !u!1 &495592097
 GameObject:
   m_ObjectHideFlags: 0
@@ -610,11 +664,12 @@ RectTransform:
   - {fileID: 195640657}
   - {fileID: 495592098}
   - {fileID: 596892642}
+  - {fileID: 199537831}
   m_Father: {fileID: 511265603}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 958.48, y: 540.02}
+  m_AnchoredPosition: {x: 1129.2, y: 626.7}
   m_SizeDelta: {x: 1923, y: 1080}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1063897875
