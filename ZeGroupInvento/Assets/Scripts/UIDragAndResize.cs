@@ -12,7 +12,7 @@ public class UIDragAndResize : MonoBehaviour, IBeginDragHandler, IDragHandler, I
     [SerializeField] private float pinchThresholdUpgrade = 1.5f;
     [SerializeField] private float pinchThresholdDowngrade = 0.6f;
     [SerializeField] private float rotationSensitivity = 1f;
-    [SerializeField] private float longPressThreshold = 0.8f;
+    [SerializeField] private float longPressThreshold = 2f;
 
     [Header("State")]
     private bool isResizable = true;
