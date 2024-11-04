@@ -7,12 +7,15 @@ using System.Linq;
 public class StickyGuidelineSystem : MonoBehaviour
 {
     [Header("Settings")]
-    [SerializeField] private float snapThreshold = 30f;
+    [SerializeField] private float snapThreshold = 50f; // Zone générale de détection
+    [SerializeField] private float activeSnapZone = 20f; // Zone où le snap devient actif
+    [SerializeField] private float snapOffset = 30f; // Distance maintenue avec la guideline
     [SerializeField] private Color stickyColor = new Color(0, 1, 0, 0.5f);
-    [SerializeField] private Color previewColor = new Color(0, 1, 0, 0.3f); // Couleur plus légère pour le preview
+    [SerializeField] private Color previewColor = new Color(0, 1, 0, 0.3f);
 
     private Canvas parentCanvas;
     private Dictionary<GameObject, HashSet<GameObject>> attachedObjects = new Dictionary<GameObject, HashSet<GameObject>>();
+    private Dictionary<GameObject, Vector2> relativePositions = new Dictionary<GameObject, Vector2>();
     private Dictionary<GameObject, Color> originalColors = new Dictionary<GameObject, Color>();
     private GameObject draggedObject;
     private RectTransform draggedRect;
@@ -91,6 +94,11 @@ public class StickyGuidelineSystem : MonoBehaviour
         GameObject nearestGuideline = null;
         float nearestDistance = float.MaxValue;
 
+        float draggedWidth = draggedRect.rect.width;
+        float draggedHeight = draggedRect.rect.height;
+        float snapOffset = 30f;  // Distance maintenue avec la guideline
+        float activeSnapZone = 20f;  // Zone plus petite où le snap devient actif
+
         var guidelines = FindObjectsOfType<RectTransform>()
             .Where(rt => rt.gameObject != null &&
                    (rt.gameObject.name.Contains("GVertical") || rt.gameObject.name.Contains("GHorizontal")));
@@ -100,32 +108,96 @@ public class StickyGuidelineSystem : MonoBehaviour
             if (!guidelineRect) continue;
 
             bool isVertical = guidelineRect.gameObject.name.Contains("GVertical");
-            float distance = isVertical ?
-                Mathf.Abs(position.x - guidelineRect.anchoredPosition.x) :
-                Mathf.Abs(position.y - guidelineRect.anchoredPosition.y);
+            Vector2 guidelinePos = guidelineRect.anchoredPosition;
 
-            if (distance < snapThreshold && distance < nearestDistance)
+            // Calcul de la distance réelle (non modifiée)
+            float distance;
+            bool isNearEdge = false;
+
+            if (isVertical)
             {
-                nearestDistance = distance;
-                nearestGuideline = guidelineRect.gameObject;
+                float rightEdgePos = position.x + draggedWidth / 2;
+                float leftEdgePos = position.x - draggedWidth / 2;
 
-                Vector2 snapped = position;
-                if (isVertical)
+                // Vérifie si on est proche d'un bord de l'objet
+                float distanceToRight = Mathf.Abs(guidelinePos.x - rightEdgePos);
+                float distanceToLeft = Mathf.Abs(guidelinePos.x - leftEdgePos);
+
+                // On ne considère que les distances proches des bords
+                if (distanceToRight < activeSnapZone || distanceToLeft < activeSnapZone)
                 {
-                    snapped.x = guidelineRect.anchoredPosition.x;
+                    distance = Mathf.Min(distanceToRight, distanceToLeft);
+                    isNearEdge = true;
                 }
                 else
                 {
-                    snapped.y = guidelineRect.anchoredPosition.y;
+                    continue;  // Skip si on n'est pas près d'un bord
                 }
-                snappedPosition = snapped;
+            }
+            else
+            {
+                float topEdgePos = position.y + draggedHeight / 2;
+                float bottomEdgePos = position.y - draggedHeight / 2;
+
+                float distanceToTop = Mathf.Abs(guidelinePos.y - topEdgePos);
+                float distanceToBottom = Mathf.Abs(guidelinePos.y - bottomEdgePos);
+
+                if (distanceToTop < activeSnapZone || distanceToBottom < activeSnapZone)
+                {
+                    distance = Mathf.Min(distanceToTop, distanceToBottom);
+                    isNearEdge = true;
+                }
+                else
+                {
+                    continue;  // Skip si on n'est pas près d'un bord
+                }
+            }
+
+            // Ne traite le snap que si on est vraiment près d'un bord
+            if (isNearEdge && distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestGuideline = guidelineRect.gameObject;
+                snappedPosition = position;
+
+                if (isVertical)
+                {
+                    float rightEdgePos = position.x + draggedWidth / 2;
+                    float leftEdgePos = position.x - draggedWidth / 2;
+
+                    if (Mathf.Abs(guidelinePos.x - rightEdgePos) < Mathf.Abs(guidelinePos.x - leftEdgePos))
+                    {
+                        // Snap par la droite
+                        snappedPosition.x = guidelinePos.x - (draggedWidth / 2 + snapOffset);
+                    }
+                    else
+                    {
+                        // Snap par la gauche
+                        snappedPosition.x = guidelinePos.x + (draggedWidth / 2 + snapOffset);
+                    }
+                }
+                else
+                {
+                    float topEdgePos = position.y + draggedHeight / 2;
+                    float bottomEdgePos = position.y - draggedHeight / 2;
+
+                    if (Mathf.Abs(guidelinePos.y - topEdgePos) < Mathf.Abs(guidelinePos.y - bottomEdgePos))
+                    {
+                        // Snap par le haut
+                        snappedPosition.y = guidelinePos.y - (draggedHeight / 2 + snapOffset);
+                    }
+                    else
+                    {
+                        // Snap par le bas
+                        snappedPosition.y = guidelinePos.y + (draggedHeight / 2 + snapOffset);
+                    }
+                }
                 shouldSnap = true;
             }
         }
 
         return nearestGuideline;
     }
-
 
     private void HandleDraggableMovement(Vector2 screenPosition)
     {
@@ -137,105 +209,145 @@ public class StickyGuidelineSystem : MonoBehaviour
             out localPoint))
         {
             Vector2 newPosition = localPoint + dragOffset;
-
-            // Vérifie le snap seulement si suffisamment de temps s'est écoulé
             bool shouldCheckSnap = Time.time - lastSnapCheckTime >= SnapCheckInterval;
-            GameObject nearestGuideline = null;
             bool shouldSnap = false;
             Vector2 snappedPosition = newPosition;
+            GameObject nearestGuideline = null;
 
             if (shouldCheckSnap)
             {
-                nearestGuideline = FindNearestGuideline(newPosition, out shouldSnap, out snappedPosition);
+                // Utilise une zone plus large pour la détection initiale
+                var guidelines = FindObjectsOfType<RectTransform>()
+                    .Where(rt => rt.gameObject != null &&
+                           (rt.gameObject.name.Contains("GVertical") || rt.gameObject.name.Contains("GHorizontal")));
+
+                float nearestDistance = float.MaxValue;
+                float draggedWidth = draggedRect.rect.width;
+                float draggedHeight = draggedRect.rect.height;
+
+                foreach (var guidelineRect in guidelines)
+                {
+                    if (!guidelineRect) continue;
+
+                    bool isVertical = guidelineRect.gameObject.name.Contains("GVertical");
+                    Vector2 guidelinePos = guidelineRect.anchoredPosition;
+
+                    // Calcul amélioré des distances pour les bords
+                    if (isVertical)
+                    {
+                        // Vérifie la distance par rapport aux bords gauche et droit
+                        float rightEdgePos = newPosition.x + draggedWidth / 2;
+                        float leftEdgePos = newPosition.x - draggedWidth / 2;
+                        float centerPos = newPosition.x;
+
+                        float distanceToRight = Mathf.Abs(guidelinePos.x - rightEdgePos);
+                        float distanceToLeft = Mathf.Abs(guidelinePos.x - leftEdgePos);
+                        float distanceToCenter = Mathf.Abs(guidelinePos.x - centerPos);
+
+                        // Prend la distance la plus proche
+                        float minDistance = Mathf.Min(distanceToRight, distanceToLeft, distanceToCenter);
+
+                        if (minDistance < snapThreshold && minDistance < nearestDistance)
+                        {
+                            nearestDistance = minDistance;
+                            nearestGuideline = guidelineRect.gameObject;
+                            shouldSnap = true;
+
+                            // Détermine la position de snap en fonction du bord le plus proche
+                            if (distanceToCenter == minDistance)
+                                snappedPosition.x = guidelinePos.x;
+                            else if (distanceToRight == minDistance)
+                                snappedPosition.x = guidelinePos.x - (draggedWidth / 2 + snapOffset);
+                            else
+                                snappedPosition.x = guidelinePos.x + (draggedWidth / 2 + snapOffset);
+                        }
+                    }
+                    else
+                    {
+                        // Même logique pour l'axe vertical
+                        float topEdgePos = newPosition.y + draggedHeight / 2;
+                        float bottomEdgePos = newPosition.y - draggedHeight / 2;
+                        float centerPos = newPosition.y;
+
+                        float distanceToTop = Mathf.Abs(guidelinePos.y - topEdgePos);
+                        float distanceToBottom = Mathf.Abs(guidelinePos.y - bottomEdgePos);
+                        float distanceToCenter = Mathf.Abs(guidelinePos.y - centerPos);
+
+                        float minDistance = Mathf.Min(distanceToTop, distanceToBottom, distanceToCenter);
+
+                        if (minDistance < snapThreshold && minDistance < nearestDistance)
+                        {
+                            nearestDistance = minDistance;
+                            nearestGuideline = guidelineRect.gameObject;
+                            shouldSnap = true;
+
+                            if (distanceToCenter == minDistance)
+                                snappedPosition.y = guidelinePos.y;
+                            else if (distanceToTop == minDistance)
+                                snappedPosition.y = guidelinePos.y - (draggedHeight / 2 + snapOffset);
+                            else
+                                snappedPosition.y = guidelinePos.y + (draggedHeight / 2 + snapOffset);
+                        }
+                    }
+                }
+
                 lastSnapCheckTime = Time.time;
                 lastNearestGuideline = nearestGuideline;
             }
             else
             {
-                // Utilise le dernier résultat connu
+                // Réutilise le dernier résultat connu
                 nearestGuideline = lastNearestGuideline;
                 if (nearestGuideline != null)
                 {
-                    bool isVertical = nearestGuideline.name.Contains("GVertical");
-                    float distance = isVertical ?
-                        Mathf.Abs(newPosition.x - nearestGuideline.GetComponent<RectTransform>().anchoredPosition.x) :
-                        Mathf.Abs(newPosition.y - nearestGuideline.GetComponent<RectTransform>().anchoredPosition.y);
-
-                    shouldSnap = distance < snapThreshold;
-                    if (shouldSnap)
-                    {
-                        snappedPosition = newPosition;
-                        if (isVertical)
-                            snappedPosition.x = nearestGuideline.GetComponent<RectTransform>().anchoredPosition.x;
-                        else
-                            snappedPosition.y = nearestGuideline.GetComponent<RectTransform>().anchoredPosition.y;
-                    }
+                    shouldSnap = true;
+                    // Maintient la dernière position snappée
+                    snappedPosition = draggedRect.anchoredPosition;
                 }
             }
 
-            // Si on ne déplace pas un objet déjà attaché
-            if (!IsAttached(draggedObject))
-            {
-                bool isNearGuideline = nearestGuideline != null && shouldSnap;
+            // Gestion des retours visuels
+            HandleVisualFeedback(nearestGuideline, shouldSnap);
 
-                if (isNearGuideline && nearestGuideline != currentSnapGuide)
-                {
-                    // Reset l'ancienne guideline si elle existe
-                    if (currentSnapGuide != null && !HasAttachedObjects(currentSnapGuide))
-                    {
-                        var oldGuideImage = currentSnapGuide.GetComponent<Image>();
-                        if (oldGuideImage && originalColors.ContainsKey(currentSnapGuide))
-                        {
-                            oldGuideImage.color = originalColors[currentSnapGuide];
-                        }
-                    }
-
-                    // Applique le preview seulement si on est vraiment proche
-                    var draggedImage = draggedObject.GetComponent<Image>();
-                    var guideImage = nearestGuideline.GetComponent<Image>();
-
-                    if (draggedImage)
-                    {
-                        if (!originalColors.ContainsKey(draggedObject))
-                            originalColors[draggedObject] = draggedImage.color;
-                        draggedImage.color = previewColor;
-                    }
-
-                    if (guideImage && !HasAttachedObjects(nearestGuideline))
-                    {
-                        if (!originalColors.ContainsKey(nearestGuideline))
-                            originalColors[nearestGuideline] = guideImage.color;
-                        guideImage.color = previewColor;
-                    }
-
-                    currentSnapGuide = nearestGuideline;
-                    isSnapping = true;
-                }
-                else if (!isNearGuideline && currentSnapGuide != null)
-                {
-                    // Reset les couleurs quand on s'éloigne
-                    var draggedImage = draggedObject.GetComponent<Image>();
-                    if (draggedImage && originalColors.ContainsKey(draggedObject))
-                    {
-                        draggedImage.color = originalColors[draggedObject];
-                    }
-
-                    if (!HasAttachedObjects(currentSnapGuide))
-                    {
-                        var guideImage = currentSnapGuide.GetComponent<Image>();
-                        if (guideImage && originalColors.ContainsKey(currentSnapGuide))
-                        {
-                            guideImage.color = originalColors[currentSnapGuide];
-                        }
-                    }
-
-                    currentSnapGuide = null;
-                    isSnapping = false;
-                }
-            }
-
-            // Met à jour la position
+            // Applique la position
             draggedRect.anchoredPosition = shouldSnap ? snappedPosition : newPosition;
+        }
+    }
+
+    private void HandleVisualFeedback(GameObject nearestGuideline, bool shouldSnap)
+    {
+        if (!IsAttached(draggedObject))
+        {
+            if (shouldSnap && nearestGuideline != currentSnapGuide)
+            {
+                // Reset l'ancienne guideline
+                if (currentSnapGuide != null && !HasAttachedObjects(currentSnapGuide))
+                {
+                    ResetVisualFeedback(currentSnapGuide);
+                }
+
+                // Applique le preview
+                ApplyPreviewColor(draggedObject);
+                if (!HasAttachedObjects(nearestGuideline))
+                {
+                    ApplyPreviewColor(nearestGuideline);
+                }
+
+                currentSnapGuide = nearestGuideline;
+                isSnapping = true;
+            }
+            else if (!shouldSnap && currentSnapGuide != null)
+            {
+                // Reset quand on s'éloigne
+                ResetVisualFeedback(draggedObject);
+                if (!HasAttachedObjects(currentSnapGuide))
+                {
+                    ResetVisualFeedback(currentSnapGuide);
+                }
+
+                currentSnapGuide = null;
+                isSnapping = false;
+            }
         }
     }
 
@@ -537,16 +649,26 @@ public class StickyGuidelineSystem : MonoBehaviour
                 RectTransform objRect = obj.GetComponent<RectTransform>();
                 if (!objRect) continue;
 
-                Vector2 objPos = objRect.anchoredPosition;
-                if (isVertical)
+                // Utilise la position relative stockée pour maintenir la position exacte
+                if (relativePositions.TryGetValue(obj, out Vector2 relativePos))
                 {
-                    objPos.x = newPosition.x;
+                    if (isVertical)
+                    {
+                        // Pour une guideline verticale, on ne met à jour que x en gardant le y relatif
+                        objRect.anchoredPosition = new Vector2(
+                            newPosition.x + relativePos.x,
+                            newPosition.y + relativePos.y
+                        );
+                    }
+                    else
+                    {
+                        // Pour une guideline horizontale, on ne met à jour que y en gardant le x relatif
+                        objRect.anchoredPosition = new Vector2(
+                            newPosition.x + relativePos.x,
+                            newPosition.y + relativePos.y
+                        );
+                    }
                 }
-                else
-                {
-                    objPos.y = newPosition.y;
-                }
-                objRect.anchoredPosition = objPos;
             }
         }
     }
@@ -600,13 +722,18 @@ public class StickyGuidelineSystem : MonoBehaviour
 
         if (attachedObjects[guideline].Add(obj))
         {
+            // Stocke la position relative complète (x et y)
+            Vector2 guidelinePos = guideline.GetComponent<RectTransform>().anchoredPosition;
+            Vector2 objPos = obj.GetComponent<RectTransform>().anchoredPosition;
+            relativePositions[obj] = objPos - guidelinePos;
+
             var image = obj.GetComponent<Image>();
             if (image && !originalColors.ContainsKey(obj))
             {
                 originalColors[obj] = image.color;
             }
 
-            // Met à jour les couleurs avec la couleur sticky
+            // Met à jour les couleurs
             var objImage = obj.GetComponent<Image>();
             var guideImage = guideline.GetComponent<Image>();
 

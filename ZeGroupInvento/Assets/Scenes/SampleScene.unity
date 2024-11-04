@@ -251,7 +251,9 @@ MonoBehaviour:
   tangibleMenuSubMenu: {fileID: 69165918572332055, guid: 96cdc25dddeab1b438fe43ec856aba01, type: 3}
   tangibleMenuSubMenuFirstSelected: {fileID: 5746695658187258623, guid: f50e0678fc04af74496c58c9bbce5c9b, type: 3}
   tangibleMenuSubMenuSecondSelected: {fileID: 6244690886992761937, guid: 6cd3226ec7d56374895f596d20d82168, type: 3}
-  doubleTapTimeThreshold: 0.3
+  gVerticalPrefab: {fileID: 7251536326507999188, guid: db8fe7365672b3946809311e149767d4, type: 3}
+  gHorizontalPrefab: {fileID: 2900696507737130148, guid: a99b605c04e4a6947b78d9bd8d648be7, type: 3}
+  tripleTapTimeThreshold: 0.3
   tapDistanceThreshold: 50
 --- !u!1 &495592097
 GameObject:
@@ -665,11 +667,12 @@ RectTransform:
   - {fileID: 495592098}
   - {fileID: 596892642}
   - {fileID: 199537831}
+  - {fileID: 1588985943}
   m_Father: {fileID: 511265603}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 1129.2, y: 626.7}
+  m_AnchoredPosition: {x: 961.5, y: 540.22}
   m_SizeDelta: {x: 1923, y: 1080}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1063897875
@@ -778,6 +781,72 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1588985942
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1588985943}
+  - component: {fileID: 1588985944}
+  - component: {fileID: 1588985945}
+  m_Layer: 5
+  m_Name: GuidelineManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1588985943
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1588985942}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1063897874}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1588985944
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1588985942}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c177c8f78015924fbf719fb543de977, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &1588985945
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1588985942}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 507633f5237ddb64094b26eba67f3ec3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  snapThreshold: 10
+  activeSnapZone: 20
+  snapOffset: 30
+  stickyColor: {r: 0, g: 1, b: 0, a: 0.5}
+  previewColor: {r: 0, g: 1, b: 0, a: 0.3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 305647482892455775}
   m_Layer: 5
   m_Name: x6RectangleTable
-  m_TagString: Untagged
+  m_TagString: Draggable
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0

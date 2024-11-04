@@ -9,24 +9,23 @@ public class TangibleMenuManager : MonoBehaviour
     [SerializeField] private GameObject tangibleMenuSubMenu;
     [SerializeField] private GameObject tangibleMenuSubMenuFirstSelected;
     [SerializeField] private GameObject tangibleMenuSubMenuSecondSelected;
-    [SerializeField] private GameObject gVerticalPrefab; // Nouveau prefab GVertical
-    [SerializeField] private GameObject gHorizontalPrefab; //
+    [SerializeField] private GameObject gVerticalPrefab;
+    [SerializeField] private GameObject gHorizontalPrefab;
 
-    [Header("Double Tap Settings")]
-    [SerializeField] private float doubleTapTimeThreshold = 0.3f;
+    [Header("Triple Tap Settings")]
+    [SerializeField] private float tripleTapTimeThreshold = 0.3f;
     [SerializeField] private float tapDistanceThreshold = 50f;
 
     private GameObject currentActiveMenu;
     private Canvas parentCanvas;
-
     private Vector2 menuPosition;
 
-    // Variables pour le système de détection de double tap
-    private float lastTapTime;
-    private Vector2 lastTapPosition;
-    private bool readyForSecondTap;
+    // Variables pour le système de détection de triple tap
+    private float[] lastTapTimes = new float[2]; // Stocke les temps des 2 derniers taps
+    private Vector2[] lastTapPositions = new Vector2[2]; // Stocke les positions des 2 derniers taps
+    private int tapCount = 0;
     private bool isProcessingTouch;
-    private GameObject currentGuidelinePrefab; // Pour stocker le prefab actif
+    private GameObject currentGuidelinePrefab;
 
     // État actuel du menu
     private enum MenuState
@@ -46,16 +45,23 @@ public class TangibleMenuManager : MonoBehaviour
             Debug.LogError("Canvas non trouvé!");
         }
 
-        lastTapTime = -doubleTapTimeThreshold;
-        readyForSecondTap = false;
+        // Initialiser les tableaux de temps et positions
+        for (int i = 0; i < 2; i++)
+        {
+            lastTapTimes[i] = -tripleTapTimeThreshold;
+            lastTapPositions[i] = Vector2.zero;
+        }
     }
+
+
+
 
     private void Update()
     {
         // Réinitialiser si trop de temps s'est écoulé depuis le premier tap
-        if (readyForSecondTap && Time.time - lastTapTime > doubleTapTimeThreshold)
+        if (tapCount > 0 && Time.time - lastTapTimes[0] > tripleTapTimeThreshold)
         {
-            readyForSecondTap = false;
+            tapCount = 0;
         }
 
         // Traiter les touches
@@ -75,6 +81,7 @@ public class TangibleMenuManager : MonoBehaviour
             ProcessTap(Input.mousePosition);
         }
     }
+
 
     public void OnHomeButtonClicked()
     {
@@ -187,19 +194,42 @@ public class TangibleMenuManager : MonoBehaviour
 
     private void ProcessTap(Vector2 tapPosition)
     {
-        if (!readyForSecondTap)
-        {
-            lastTapTime = Time.time;
-            lastTapPosition = tapPosition;
-            readyForSecondTap = true;
-        }
-        else
-        {
-            float timeSinceLastTap = Time.time - lastTapTime;
-            float distanceFromLastTap = Vector2.Distance(tapPosition, lastTapPosition);
+        float currentTime = Time.time;
 
-            if (timeSinceLastTap <= doubleTapTimeThreshold && distanceFromLastTap <= tapDistanceThreshold)
+        // Si c'est le premier tap ou si le tap précédent est trop ancien
+        if (tapCount == 0 || currentTime - lastTapTimes[0] > tripleTapTimeThreshold)
+        {
+            tapCount = 1;
+            lastTapTimes[0] = currentTime;
+            lastTapPositions[0] = tapPosition;
+        }
+        // Deuxième tap
+        else if (tapCount == 1)
+        {
+            float distanceFromLastTap = Vector2.Distance(tapPosition, lastTapPositions[0]);
+
+            if (distanceFromLastTap <= tapDistanceThreshold)
             {
+                tapCount = 2;
+                lastTapTimes[1] = currentTime;
+                lastTapPositions[1] = tapPosition;
+            }
+            else
+            {
+                tapCount = 1;
+                lastTapTimes[0] = currentTime;
+                lastTapPositions[0] = tapPosition;
+            }
+        }
+        // Troisième tap
+        else if (tapCount == 2)
+        {
+            float distanceFromLastTap = Vector2.Distance(tapPosition, lastTapPositions[1]);
+            float distanceFromFirstTap = Vector2.Distance(tapPosition, lastTapPositions[0]);
+
+            if (distanceFromLastTap <= tapDistanceThreshold && distanceFromFirstTap <= tapDistanceThreshold)
+            {
+                // Triple tap détecté
                 if (currentActiveMenu != null && IsPositionOverMenu(tapPosition))
                 {
                     HideMenu();
@@ -207,14 +237,13 @@ public class TangibleMenuManager : MonoBehaviour
                 else
                 {
                     ShowMenuGlobalAtPosition(tapPosition);
-                    currentState = MenuState.Global; // Réinitialiser l'état
+                    currentState = MenuState.Global;
                 }
             }
 
-            readyForSecondTap = false;
+            tapCount = 0; // Réinitialiser après le traitement
         }
     }
-
 
     private bool IsPositionOverMenu(Vector2 screenPosition)
     {
@@ -340,8 +369,15 @@ public class TangibleMenuManager : MonoBehaviour
             currentGuidelinePrefab = null;
         }
 
+        // Réinitialiser l'état et les variables du triple tap
         currentState = MenuState.Global;
-        readyForSecondTap = false;
-        lastTapTime = -doubleTapTimeThreshold;
+        tapCount = 0;
+
+        // Réinitialiser les tableaux de temps et positions
+        for (int i = 0; i < 2; i++)
+        {
+            lastTapTimes[i] = -tripleTapTimeThreshold;
+            lastTapPositions[i] = Vector2.zero;
+        }
     }
 }
