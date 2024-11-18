@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System.Collections.Generic;
 using Unity.IO.LowLevel.Unsafe;
+using UnityEngine.SceneManagement;
 
 public class MenuManager : MonoBehaviour
 {
@@ -26,6 +27,22 @@ public class MenuManager : MonoBehaviour
 
         SetupButtons();
     }
+
+    private void Update()
+    {
+        // Vérifie si la touche N est pressée
+        if (Input.GetKeyDown(KeyCode.N))
+        {
+            ReloadCurrentScene();
+        }
+    }
+
+    private void ReloadCurrentScene()
+    {
+        Scene currentScene = SceneManager.GetActiveScene();
+        SceneManager.LoadScene(currentScene.name);
+    }
+
 
     private void SetupButtons()
     {
