@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
+using System.Linq;
 
 public class ElementSpawner : MonoBehaviour
 {
@@ -10,64 +11,136 @@ public class ElementSpawner : MonoBehaviour
     public GameObject rectangleTablePrefab;
 
     [Header("Spawn Settings")]
-    public float spawnRadius = 100f; // Distance entre les éléments
-    public Vector2 centerOffset = new Vector2(0, 0); // Offset du centre de l'écran si nécessaire
+    public float spawnRadius = 100f;
+    public Vector2 centerOffset = new Vector2(0, 0);
 
     private List<GameObject> spawnedElements = new List<GameObject>();
-    private Transform contentArea; // Référence à la zone de contenu
+    private Transform backgroundPanel;
 
     private void Start()
     {
-        // Trouver la zone de contenu
-        contentArea = GameObject.Find("ContentArea").transform;
+        backgroundPanel = transform.parent;
+        if (backgroundPanel == null || !backgroundPanel.name.Equals("BackgroundPanel"))
+        {
+            Debug.LogError($"Ce script doit être enfant du BackgroundPanel! Parent actuel : {(backgroundPanel != null ? backgroundPanel.name : "null")}");
+            return;
+        }
 
-        // Setup des boutons
-        SetupButton("Toilet", OnToiletSpawn);
-        SetupButton("CircleButtonSpawn", OnCircleTableSpawn);
-        SetupButton("rectangleButtonSpaw", OnRectangleTableSpawn);
+        Debug.Log($"BackgroundPanel trouvé : {backgroundPanel.name}");
+
+        // Trouver TablesPanel en utilisant le chemin complet depuis Canvas
+        Transform canvas = backgroundPanel.parent;
+        if (canvas != null)
+        {
+            // Chercher TablesPanel dans tous les enfants de Canvas, même désactivés
+            Transform tablesPanel = FindInactiveObject(canvas, "TablesPanel");
+
+            if (tablesPanel != null)
+            {
+                Debug.Log("TablesPanel trouvé, même s'il est désactivé");
+                SetupButtonInPanel(tablesPanel, "rectangleButtonSpawn", OnRectangleTableSpawn);
+                SetupButtonInPanel(tablesPanel, "CircleButtonSpawn", OnCircleTableSpawn);
+            }
+            else
+            {
+                Debug.LogError("TablesPanel non trouvé dans la hiérarchie du Canvas!");
+            }
+        }
+
+        if (toiletPrefab == null || circleTablePrefab == null || rectangleTablePrefab == null)
+        {
+            Debug.LogError("Un ou plusieurs prefabs ne sont pas assignés dans l'inspecteur!");
+        }
     }
 
-    private void SetupButton(string buttonName, UnityEngine.Events.UnityAction action)
+    private Transform FindInactiveObject(Transform parent, string name)
     {
-        Button button = GameObject.Find(buttonName)?.GetComponent<Button>();
-        if (button != null)
+        // Vérifier d'abord l'objet parent lui-même
+        if (parent.name == name)
+            return parent;
+
+        // Parcourir tous les enfants, même désactivés
+        foreach (Transform child in parent)
         {
-            button.onClick.AddListener(action);
+            if (child.name == name)
+                return child;
+
+            // Recherche récursive dans les enfants
+            Transform found = FindInactiveObject(child, name);
+            if (found != null)
+                return found;
         }
-        else
+
+        return null;
+    }
+
+    private void SetupButtonInPanel(Transform panel, string buttonName, UnityEngine.Events.UnityAction action)
+    {
+        // Chercher le bouton dans le panel, même s'il est désactivé
+        Transform buttonTransform = FindInactiveObject(panel, buttonName);
+        if (buttonTransform == null)
         {
-            Debug.LogWarning($"Button {buttonName} not found!");
+            Debug.LogError($"Bouton {buttonName} non trouvé dans TablesPanel!");
+            return;
         }
+
+        Button button = buttonTransform.GetComponent<Button>();
+        if (button == null)
+        {
+            button = buttonTransform.gameObject.AddComponent<Button>();
+            Debug.Log($"Composant Button ajouté à {buttonName}");
+        }
+
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(action);
+        Debug.Log($"Bouton configuré avec succès : {buttonName}");
     }
 
     private void OnToiletSpawn()
     {
+        Debug.Log("Toilet spawn button pressed");
         SpawnElement(toiletPrefab);
     }
 
     private void OnCircleTableSpawn()
     {
+        Debug.Log("Circle table spawn button pressed");
         SpawnElement(circleTablePrefab);
     }
 
     private void OnRectangleTableSpawn()
     {
+        Debug.Log("Rectangle table spawn button pressed");
         SpawnElement(rectangleTablePrefab);
     }
 
     private void SpawnElement(GameObject prefab)
     {
-        if (prefab == null) return;
+        if (prefab == null || backgroundPanel == null)
+        {
+            Debug.LogError("Prefab ou BackgroundPanel manquant!");
+            return;
+        }
 
         Vector2 spawnPosition = FindValidSpawnPosition();
 
-        GameObject newElement = Instantiate(prefab, contentArea);
+        GameObject newElement = Instantiate(prefab, backgroundPanel);
         RectTransform rectTransform = newElement.GetComponent<RectTransform>();
 
         if (rectTransform != null)
         {
             rectTransform.anchoredPosition = spawnPosition;
+            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
+
             spawnedElements.Add(newElement);
+            Debug.Log($"Element spawned at position: {spawnPosition}");
+        }
+        else
+        {
+            Debug.LogError("L'élément spawné n'a pas de composant RectTransform!");
+            Destroy(newElement);
         }
     }
 
@@ -75,14 +148,13 @@ public class ElementSpawner : MonoBehaviour
     {
         Vector2 centerPos = centerOffset;
 
-        // Si aucun élément n'est spawné, utiliser le centre
         if (spawnedElements.Count == 0)
             return centerPos;
 
-        // Chercher une position valide
+        spawnedElements.RemoveAll(element => element == null);
+
         for (int ring = 1; ring <= spawnedElements.Count + 1; ring++)
         {
-            // Essayer 8 positions autour du centre
             for (int i = 0; i < 8; i++)
             {
                 float angle = i * (2 * Mathf.PI / 8);
@@ -91,19 +163,17 @@ public class ElementSpawner : MonoBehaviour
                     Mathf.Sin(angle) * spawnRadius * ring
                 );
 
-                // Vérifier si la position est libre
                 if (IsPositionFree(testPos))
                     return testPos;
             }
         }
 
-        // Si aucune position n'est trouvée, retourner une position par défaut
         return centerPos + new Vector2(spawnedElements.Count * spawnRadius, 0);
     }
 
     private bool IsPositionFree(Vector2 position)
     {
-        foreach (GameObject element in spawnedElements)
+        foreach (GameObject element in spawnedElements.ToList())
         {
             if (element == null) continue;
 
