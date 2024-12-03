@@ -58,14 +58,21 @@ public class RoomManager : MonoBehaviour
 
     public void AddElement(string type, Vector2Int gridPosition, float rotation)
     {
+        // Valider la position avec GridUIManager
+        Vector2Int validPosition = gridUIManager.ValidatePosition(gridPosition);
+
         RoomElement newElement = new RoomElement
         {
             id = Guid.NewGuid().ToString(),
             type = type,
-            position = new Position { x = gridPosition.x, y = gridPosition.y },
+            position = new Position { x = validPosition.x, y = validPosition.y },
             rotation = rotation
         };
 
+        // Créer l'élément UI immédiatement
+        gridUIManager.CreateElementUI(newElement);
+
+        // Ajouter aux éléments en attente et mettre à jour le serveur
         pendingElements.Add(newElement);
         StartCoroutine(UpdateRoomElements());
     }
