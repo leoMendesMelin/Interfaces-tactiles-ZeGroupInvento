@@ -17,6 +17,7 @@ public class RoomElement
 {
     public string id;
     public string type;
+    public bool isBeingEdited;
     public Position position;
     public float rotation;
 }
