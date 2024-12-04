@@ -7,23 +7,13 @@ using System;
 // Gestionnaire principal pour synchroniser les données de la salle
 public class RoomManager : MonoBehaviour
 {
-    private Room currentRoom;
-    private const string SERVER_URL = "http://localhost:9090";
-    private List<RoomElement> pendingElements = new List<RoomElement>();
-    private GridManager gridManager;
-    private GridUIManager gridUIManager;
     public static RoomManager Instance { get; private set; }
 
-    private void Start()
-    {
-        var backgroundPanel = GameObject.Find("BackgroundPanel").GetComponent<RectTransform>();
-        gridManager = FindObjectOfType<GridManager>();
-        gridUIManager = FindObjectOfType<GridUIManager>();
+    private Room currentRoom;
+    private GridManager gridManager;
+    private GridUIManager gridUIManager;
 
-        gridManager.Initialize(backgroundPanel);
-        gridUIManager.Initialize(backgroundPanel);
-        StartCoroutine(FetchRoomData());
-    }
+    [SerializeField] private RoomNetworkService networkService;
 
     private void Awake()
     {
@@ -36,67 +26,76 @@ public class RoomManager : MonoBehaviour
         {
             Destroy(gameObject);
         }
+
     }
 
-    private IEnumerator FetchRoomData()
+    private void Start()
     {
-        using (UnityWebRequest request = UnityWebRequest.Get($"{SERVER_URL}/room"))
-        {
-            yield return request.SendWebRequest();
-            if (request.result == UnityWebRequest.Result.Success)
-            {
-                string jsonResponse = request.downloadHandler.text;
-                jsonResponse = jsonResponse.TrimStart('[').TrimEnd(']');
-                currentRoom = JsonUtility.FromJson<Room>(jsonResponse);
+        var backgroundPanel = GameObject.Find("BackgroundPanel").GetComponent<RectTransform>();
+        gridManager = FindObjectOfType<GridManager>();
+        gridUIManager = FindObjectOfType<GridUIManager>();
 
-                // Créer la grille et afficher les éléments
-                gridManager.CreateGrid(currentRoom.gridSize);
-                gridUIManager.DisplayElements(currentRoom.elements);
-            }
-        }
+        gridManager.Initialize(backgroundPanel);
+        gridUIManager.Initialize(backgroundPanel);
+
+        // Charger les données initiales
+        StartCoroutine(networkService.FetchRoom(OnRoomDataReceived));
+    }
+
+    private void OnRoomDataReceived(Room room)
+    {
+        currentRoom = room;
+        gridManager.CreateGrid(currentRoom.gridSize);
+        gridUIManager.DisplayElements(currentRoom.elements);
     }
 
     public void AddElement(string type, Vector2Int gridPosition, float rotation)
     {
-        // Valider la position avec GridUIManager
-        Vector2Int validPosition = gridUIManager.ValidatePosition(gridPosition);
-
+        // Créer le nouvel élément
         RoomElement newElement = new RoomElement
         {
-            id = Guid.NewGuid().ToString(),
+            id = System.Guid.NewGuid().ToString(),
             type = type,
-            position = new Position { x = validPosition.x, y = validPosition.y },
-            rotation = rotation
+            position = new Position { x = gridPosition.x, y = gridPosition.y },
+            rotation = rotation,
+            isBeingEdited = false
         };
 
-        // Créer l'élément UI immédiatement
-        gridUIManager.CreateElementUI(newElement);
-
-        // Ajouter aux éléments en attente et mettre à jour le serveur
-        pendingElements.Add(newElement);
-        StartCoroutine(UpdateRoomElements());
+        // Au lieu de créer l'UI immédiatement, on le fait seulement après confirmation du serveur
+        StartCoroutine(AddElementWithConfirmation(newElement));
     }
 
-    private IEnumerator UpdateRoomElements()
+    private IEnumerator AddElementWithConfirmation(RoomElement newElement)
     {
-        if (currentRoom == null || pendingElements.Count == 0)
-            yield break;
+        bool elementAdded = false;
 
-        var allElements = new List<RoomElement>(currentRoom.elements);
-        allElements.AddRange(pendingElements);
+        yield return StartCoroutine(networkService.AddRoomElement(
+            currentRoom.id,
+            newElement,
+            (updatedRoom) => {
+                // Si le serveur confirme l'ajout, on crée l'UI
+                gridUIManager.CreateElementUI(newElement);
+                elementAdded = true;
+                OnRoomDataReceived(updatedRoom);
+            }
+        ));
 
-        var updateData = new Room
+        if (!elementAdded)
         {
-            id = currentRoom.id,
-            gridSize = currentRoom.gridSize,
-            elements = allElements.ToArray()
-        };
+            // Si l'élément n'a pas été ajouté, on peut afficher un message d'erreur
+            Debug.LogWarning("L'élément n'a pas pu être ajouté au serveur");
+        }
+    }
 
-        currentRoom = updateData; // Mettre à jour la room locale
-        pendingElements.Clear();
 
-        // Mettre à jour l'UI avec tous les éléments
-        gridUIManager.DisplayElements(currentRoom.elements);
+    public void UpdateElement(RoomElement element)
+    {
+        StartCoroutine(networkService.UpdateRoomElement(currentRoom.id, element, OnRoomDataReceived));
+    }
+
+    public bool ValidatePosition(Vector2Int position)
+    {
+        return gridUIManager.ValidatePosition(position) == position;
     }
 
     public Room GetCurrentRoom() => currentRoom;

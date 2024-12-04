@@ -21,13 +21,14 @@ public class ElementSpawner : MonoBehaviour
 
     private void Awake()
     {
-        roomManager = RoomManager.Instance;
         gridManager = FindObjectOfType<GridManager>();
         gridUIManager = FindObjectOfType<GridUIManager>();
     }
     private void Start()
     {
         ConfigureAllButtons();
+        roomManager = RoomManager.Instance;
+
     }
 
     private void ConfigureAllButtons()
