@@ -102,7 +102,13 @@ public class ElementSpawner : MonoBehaviour
 
     private void SpawnElement(GameObject prefab)
     {
-        Vector2Int gridPos = gridManager.GetGridPosition(Vector2.zero); // Position centrale par défaut
-        roomManager.AddElement(prefab.name, gridPos, 0f);
+        // Position centrale par défaut
+        Vector2Int gridPos = gridManager.GetGridPosition(Vector2.zero);
+
+        // Valider la position avec la méthode de GridUIManager qui gère la spirale
+        Vector2Int validatedPos = gridUIManager.ValidatePosition(gridPos);
+
+        // Créer l'élément avec la position validée
+        roomManager.AddElement(prefab.name, validatedPos, 0f);
     }
 }

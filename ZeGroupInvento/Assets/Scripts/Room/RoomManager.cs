@@ -42,7 +42,7 @@ public class RoomManager : MonoBehaviour
         StartCoroutine(networkService.FetchRoom(OnRoomDataReceived));
     }
 
-    private void OnRoomDataReceived(Room room)
+    public void OnRoomDataReceived(Room room)
     {
         currentRoom = room;
         gridManager.CreateGrid(currentRoom.gridSize);
@@ -51,6 +51,8 @@ public class RoomManager : MonoBehaviour
 
     public void AddElement(string type, Vector2Int gridPosition, float rotation)
     {
+
+        //appel validatePosition, et ensuite on attribue ça a newElement
         // Créer le nouvel élément
         RoomElement newElement = new RoomElement
         {
@@ -74,7 +76,7 @@ public class RoomManager : MonoBehaviour
             newElement,
             (updatedRoom) => {
                 // Si le serveur confirme l'ajout, on crée l'UI
-                gridUIManager.CreateElementUI(newElement);
+                gridUIManager.CreateOrUpdateElementUI(newElement);
                 elementAdded = true;
                 OnRoomDataReceived(updatedRoom);
             }
@@ -87,11 +89,19 @@ public class RoomManager : MonoBehaviour
         }
     }
 
-
-    public void UpdateElement(RoomElement element)
+    //Permet d'update l'UI d'un élément
+    public void updateUIElement(RoomElement newElement)
     {
-        StartCoroutine(networkService.UpdateRoomElement(currentRoom.id, element, OnRoomDataReceived));
+        if (newElement == null)
+        {
+            Debug.LogWarning("erreur element est null");
+        }
+        gridUIManager.CreateOrUpdateElementUI(newElement);
+
     }
+
+
+
 
     public bool ValidatePosition(Vector2Int position)
     {

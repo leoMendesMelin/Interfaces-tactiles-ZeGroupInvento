@@ -29,14 +29,6 @@ public class GridUIManager : MonoBehaviour
         gridManager = FindObjectOfType<GridManager>();
     }
 
-    public void DisplayElements(RoomElement[] elements)
-    {
-        ClearCurrentElements();
-        foreach (var element in elements)
-        {
-            CreateElementUI(element);
-        }
-    }
 
     private void ClearCurrentElements()
     {
@@ -47,7 +39,7 @@ public class GridUIManager : MonoBehaviour
         elementInstances.Clear();
     }
 
-    public void CreateElementUI(RoomElement element)
+    public void CreateOrUpdateElementUI(RoomElement element)
     {
         var prefabMapping = prefabMappings.Find(pm => pm.elementType == element.type);
         if (prefabMapping == null)
@@ -56,16 +48,69 @@ public class GridUIManager : MonoBehaviour
             return;
         }
 
-        GameObject elementObj = Instantiate(prefabMapping.prefab, backgroundPanel);
-        RectTransform rectTransform = elementObj.GetComponent<RectTransform>();
+        // Vérifier si l'élément existe déjà
+        if (elementInstances.TryGetValue(element.id, out GameObject existingElement))
+        {
+            // Mettre à jour la position de l'élément existant
+            RectTransform rectTransform = existingElement.GetComponent<RectTransform>();
+            Vector2 worldPos = gridManager.GetWorldPosition(new Vector2Int(
+                Mathf.RoundToInt(element.position.x),
+                Mathf.RoundToInt(element.position.y)
+            ));
+            rectTransform.anchoredPosition = worldPos;
+            rectTransform.rotation = Quaternion.Euler(0, 0, element.rotation);
+        }
+        else
+        {
+            // Créer un nouvel élément
+            GameObject elementObj = Instantiate(prefabMapping.prefab, backgroundPanel);
+            RectTransform rectTransform = elementObj.GetComponent<RectTransform>();
+            Vector2 worldPos = gridManager.GetWorldPosition(new Vector2Int(
+                Mathf.RoundToInt(element.position.x),
+                Mathf.RoundToInt(element.position.y)
+            ));
+            rectTransform.anchoredPosition = worldPos;
+            rectTransform.rotation = Quaternion.Euler(0, 0, element.rotation);
 
-        Vector2 worldPos = gridManager.GetWorldPosition(new Vector2Int(
-            Mathf.RoundToInt(element.position.x),
-            Mathf.RoundToInt(element.position.y)
-        ));
+            // Ajouter l'élément au dictionnaire
+            elementInstances[element.id] = elementObj;
 
-        rectTransform.anchoredPosition = worldPos;
-        elementInstances[element.id] = elementObj;
+            // Ajouter les composants nécessaires (comme ElementDragHandler)
+            ElementDragHandler dragHandler = elementObj.GetComponent<ElementDragHandler>();
+            if (dragHandler != null)
+            {
+                dragHandler.Initialize(element);
+            }
+        }
+    }
+
+    // Mettre à jour la méthode DisplayElements pour utiliser CreateOrUpdateElementUI
+    public void DisplayElements(RoomElement[] elements)
+    {
+        // Créer un ensemble d'IDs à conserver
+        HashSet<string> activeIds = new HashSet<string>();
+
+        foreach (var element in elements)
+        {
+            CreateOrUpdateElementUI(element);
+            activeIds.Add(element.id);
+        }
+
+        // Supprimer les éléments qui ne sont plus présents
+        List<string> idsToRemove = new List<string>();
+        foreach (var kvp in elementInstances)
+        {
+            if (!activeIds.Contains(kvp.Key))
+            {
+                Destroy(kvp.Value);
+                idsToRemove.Add(kvp.Key);
+            }
+        }
+
+        foreach (var id in idsToRemove)
+        {
+            elementInstances.Remove(id);
+        }
     }
 
     public Vector2Int ValidatePosition(Vector2Int position)
