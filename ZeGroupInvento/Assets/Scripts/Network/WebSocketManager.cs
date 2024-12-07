@@ -128,7 +128,7 @@ public class WebSocketManager : MonoBehaviour
 
                 case "roomUpdated":
                     var roomMessage = JsonConvert.DeserializeObject<WebSocketRoomMessage>(data);
-                    roomManager.OnRoomDataReceived(roomMessage.room);
+                    //roomManager.OnRoomDataReceived(roomMessage.room);
                     break;
             }
         }

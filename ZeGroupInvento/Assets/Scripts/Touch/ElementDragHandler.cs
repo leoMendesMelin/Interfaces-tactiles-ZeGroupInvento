@@ -46,13 +46,7 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
         if (roomManager == null) roomManager = RoomManager.Instance;
         if (webSocketManager == null) webSocketManager = FindObjectOfType<WebSocketManager>();
 
-        // Log des états
-        Debug.Log($"Component states after initialization:");
-        Debug.Log($"- RectTransform: {(rectTransform != null ? "Found" : "Missing")}");
-        Debug.Log($"- Canvas: {(canvas != null ? "Found" : "Missing")}");
-        Debug.Log($"- GridManager: {(gridManager != null ? "Found" : "Missing")}");
-        Debug.Log($"- RoomManager: {(roomManager != null ? "Found" : "Missing")}");
-        Debug.Log($"- WebSocketManager: {(webSocketManager != null ? "Found" : "Missing")}");
+      
     }
 
     public void OnBeginDrag(PointerEventData eventData)
@@ -79,27 +73,34 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
     {
         if (elementData == null || webSocketManager == null || canvas == null)
         {
-            Debug.LogError($"Missing components in OnDrag: elementData: {elementData != null}, webSocketManager: {webSocketManager != null}, canvas: {canvas != null}");
+            Debug.LogError($"Missing components in OnDrag");
             return;
         }
 
-        Vector2 position;
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+        // Convertir la position de la souris en position locale dans le canvas
+        Vector2 mousePosition;
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
             (RectTransform)canvas.transform,
             eventData.position,
             canvas.worldCamera,
-            out position
-        );
-        rectTransform.anchoredPosition = position;
-
-        // Convertir en position de grille
-        Vector2Int gridPosition = gridManager.GetGridPosition(position);
-        elementData.position = new Position
+            out mousePosition))
         {
-            x = gridPosition.x,
-            y = gridPosition.y
-        };
-        webSocketManager.EmitElementDragging(elementData);
+            // Convertir en position grille
+            Vector2Int gridPosition = gridManager.GetGridPosition(mousePosition);
+
+            // Convertir la position grille en position monde et l'appliquer directement
+            rectTransform.anchoredPosition = gridManager.GetWorldPosition(gridPosition);
+
+            // Mettre à jour les données de l'élément
+            elementData.position = new Position
+            {
+                x = gridPosition.x,
+                y = gridPosition.y
+            };
+
+            // Émettre l'événement de drag
+            webSocketManager.EmitElementDragging(elementData);
+        }
     }
 
     public void OnEndDrag(PointerEventData eventData)
@@ -112,20 +113,14 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
         }
 
         Vector2Int newGridPosition = gridManager.GetGridPosition(rectTransform.anchoredPosition);
-        bool isValidPosition = roomManager.ValidatePosition(newGridPosition);
-        if (isValidPosition)
+        
+        elementData.position = new Position
         {
-            elementData.position = new Position
-            {
-                x = newGridPosition.x,
-                y = newGridPosition.y
-            };
-            elementData.isBeingEdited = false;
-            webSocketManager.EmitElementDragEnd(elementData);
-        }
-        else
-        {
-            rectTransform.anchoredPosition = originalPosition;
-        }
+            x = newGridPosition.x,
+            y = newGridPosition.y
+        };
+        elementData.isBeingEdited = false;
+        webSocketManager.EmitElementDragEnd(elementData);
+       
     }
 }

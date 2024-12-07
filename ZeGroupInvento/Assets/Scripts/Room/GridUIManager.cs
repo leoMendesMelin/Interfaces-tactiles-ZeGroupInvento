@@ -40,49 +40,48 @@ public class GridUIManager : MonoBehaviour
     }
 
     public void CreateOrUpdateElementUI(RoomElement element)
+{
+    var prefabMapping = prefabMappings.Find(pm => pm.elementType == element.type);
+    if (prefabMapping == null)
     {
-        var prefabMapping = prefabMappings.Find(pm => pm.elementType == element.type);
-        if (prefabMapping == null)
-        {
-            Debug.LogError($"No prefab found for element type: {element.type}");
-            return;
-        }
-
-        // Vérifier si l'élément existe déjà
-        if (elementInstances.TryGetValue(element.id, out GameObject existingElement))
-        {
-            // Mettre à jour la position de l'élément existant
-            RectTransform rectTransform = existingElement.GetComponent<RectTransform>();
-            Vector2 worldPos = gridManager.GetWorldPosition(new Vector2Int(
-                Mathf.RoundToInt(element.position.x),
-                Mathf.RoundToInt(element.position.y)
-            ));
-            rectTransform.anchoredPosition = worldPos;
-            rectTransform.rotation = Quaternion.Euler(0, 0, element.rotation);
-        }
-        else
-        {
-            // Créer un nouvel élément
-            GameObject elementObj = Instantiate(prefabMapping.prefab, backgroundPanel);
-            RectTransform rectTransform = elementObj.GetComponent<RectTransform>();
-            Vector2 worldPos = gridManager.GetWorldPosition(new Vector2Int(
-                Mathf.RoundToInt(element.position.x),
-                Mathf.RoundToInt(element.position.y)
-            ));
-            rectTransform.anchoredPosition = worldPos;
-            rectTransform.rotation = Quaternion.Euler(0, 0, element.rotation);
-
-            // Ajouter l'élément au dictionnaire
-            elementInstances[element.id] = elementObj;
-
-            // Ajouter les composants nécessaires (comme ElementDragHandler)
-            ElementDragHandler dragHandler = elementObj.GetComponent<ElementDragHandler>();
-            if (dragHandler != null)
-            {
-                dragHandler.Initialize(element);
-            }
-        }
+        Debug.LogError($"No prefab found for element type: {element.type}");
+        return;
     }
+
+    // On part de la position grille
+    Vector2Int gridPosition = new Vector2Int(
+        Mathf.RoundToInt(element.position.x),
+        Mathf.RoundToInt(element.position.y)
+    );
+
+    // Si l'élément existe, on le détruit
+    if (elementInstances.TryGetValue(element.id, out GameObject existingElement))
+    {
+        Destroy(existingElement);
+    }
+
+    // Créer un nouvel élément
+    GameObject elementObj = Instantiate(prefabMapping.prefab, backgroundPanel);
+    RectTransform rectTransform = elementObj.GetComponent<RectTransform>();
+
+    // Positionner directement sur la grille
+    rectTransform.anchoredPosition = gridManager.GetWorldPosition(gridPosition);
+
+    // Appliquer la rotation normalisée
+    float normalizedRotation = element.rotation % 360;
+    if (normalizedRotation < 0) normalizedRotation += 360;
+    rectTransform.rotation = Quaternion.Euler(0, 0, normalizedRotation);
+
+    // Mettre à jour ou ajouter l'élément dans le dictionnaire
+    elementInstances[element.id] = elementObj;
+
+    // Initialiser ElementDragHandler
+    ElementDragHandler dragHandler = elementObj.GetComponent<ElementDragHandler>();
+    if (dragHandler != null)
+    {
+        dragHandler.Initialize(element);
+    }
+}
 
     // Mettre à jour la méthode DisplayElements pour utiliser CreateOrUpdateElementUI
     public void DisplayElements(RoomElement[] elements)

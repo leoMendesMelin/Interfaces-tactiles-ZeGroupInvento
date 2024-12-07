@@ -102,7 +102,7 @@ public class RoomManager : MonoBehaviour
 
 
 
-
+    //permet d'appeler la méthode de gridUIManager
     public bool ValidatePosition(Vector2Int position)
     {
         return gridUIManager.ValidatePosition(position) == position;
