@@ -34,7 +34,7 @@ public class ElementSpawner : MonoBehaviour
     private void ConfigureAllButtons()
     {
         Transform canvas = transform.root;
-        foreach (var panelName in new[] { "MenuPanelSouth", "MenuPanelNorth" })
+        foreach (var panelName in new[] { "ElementMenuPanelSouth", "ElementMenuPanelNorth" })
         {
             Transform panel = FindInactiveObject(canvas, panelName);
             if (panel != null)
@@ -102,6 +102,8 @@ public class ElementSpawner : MonoBehaviour
 
     private void SpawnElement(GameObject prefab)
     {
+        Debug.LogWarning("JAI CLICQUEEE");
+
         // Position centrale par défaut
         Vector2Int gridPos = gridManager.GetGridPosition(Vector2.zero);
 

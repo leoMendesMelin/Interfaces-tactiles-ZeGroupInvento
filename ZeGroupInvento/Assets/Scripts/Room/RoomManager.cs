@@ -62,6 +62,7 @@ public class RoomManager : MonoBehaviour
             rotation = rotation,
             isBeingEdited = false
         };
+        Debug.LogWarning("DANS ADD ELEMENT");
 
         // Au lieu de créer l'UI immédiatement, on le fait seulement après confirmation du serveur
         StartCoroutine(AddElementWithConfirmation(newElement));
@@ -70,6 +71,7 @@ public class RoomManager : MonoBehaviour
     private IEnumerator AddElementWithConfirmation(RoomElement newElement)
     {
         bool elementAdded = false;
+        Debug.LogWarning("DANS ADD WITH CONFIRMATION");
 
         yield return StartCoroutine(networkService.AddRoomElement(
             currentRoom.id,

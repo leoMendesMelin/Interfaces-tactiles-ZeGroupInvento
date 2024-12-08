@@ -3,28 +3,29 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using System.Collections;
 
-public class SwipeablePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+public class SwipeableZonePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     [Header("Panels")]
-    public GameObject elementsPanel;
+    public GameObject createZonePanel;
+    public GameObject assignWaiterPanel;
+    public GameObject notificationsPanel;
     public GameObject tablesPanel;
-    public GameObject settingsPanel;
 
     [Header("Buttons")]
-    public Button elementsButton;
+    public Button createZoneButton;
+    public Button assignWaiterButton;
+    public Button notificationsButton;
     public Button tablesButton;
-    public Button settingsButton;
 
     [Header("Position Settings")]
     public float offsetY = 250f;
     public float swipeThreshold = 50f;
     public float animationDuration = 0.3f;
-    public bool isInverted = false; // Nouvelle variable pour indiquer si le menu est inversé
-
+    public bool isInverted = false;
 
     private RectTransform rectTransform;
     private Vector2 dragStartPos;
-    private Vector2 originalPosition; // Position d'origine du menu
+    private Vector2 originalPosition;
     private bool isOpen = false;
     private Coroutine animationCoroutine;
     private Color defaultButtonColor;
@@ -33,44 +34,48 @@ public class SwipeablePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
     private void Awake()
     {
         rectTransform = GetComponent<RectTransform>();
-        defaultButtonColor = elementsButton.GetComponent<Image>().color;
+        defaultButtonColor = createZoneButton.GetComponent<Image>().color;
 
-        // Sauvegarder la position originale
+        // Sauvegarder la position originale (position ouverte)
         originalPosition = rectTransform.anchoredPosition;
-        float actualOffset = isInverted ? offsetY : -offsetY;
-        rectTransform.anchoredPosition = originalPosition + new Vector2(0, actualOffset);
 
-
-  
+        // Définir l'état fermé
+        isOpen = false;
 
         // Setup initial
-        elementsPanel.SetActive(true);
+        createZonePanel.SetActive(true);
+        assignWaiterPanel.SetActive(false);
+        notificationsPanel.SetActive(false);
         tablesPanel.SetActive(false);
-        settingsPanel.SetActive(false);
 
         // Setup des boutons
-        elementsButton.onClick.AddListener(() => SwitchPanel(elementsPanel, elementsButton));
+        createZoneButton.onClick.AddListener(() => SwitchPanel(createZonePanel, createZoneButton));
+        assignWaiterButton.onClick.AddListener(() => SwitchPanel(assignWaiterPanel, assignWaiterButton));
+        notificationsButton.onClick.AddListener(() => SwitchPanel(notificationsPanel, notificationsButton));
         tablesButton.onClick.AddListener(() => SwitchPanel(tablesPanel, tablesButton));
-        settingsButton.onClick.AddListener(() => SwitchPanel(settingsPanel, settingsButton));
 
-        SetButtonSelected(elementsButton);
+        SetButtonSelected(createZoneButton);
+
+        // Forcer la fermeture du panel
+        ClosePanel();
     }
 
     private void SwitchPanel(GameObject targetPanel, Button targetButton)
     {
         // Activer uniquement le panel ciblé
-        elementsPanel.SetActive(targetPanel == elementsPanel);
+        createZonePanel.SetActive(targetPanel == createZonePanel);
+        assignWaiterPanel.SetActive(targetPanel == assignWaiterPanel);
+        notificationsPanel.SetActive(targetPanel == notificationsPanel);
         tablesPanel.SetActive(targetPanel == tablesPanel);
-        settingsPanel.SetActive(targetPanel == settingsPanel);
 
         // Mettre à jour les couleurs des boutons
         ResetButtonColors();
         SetButtonSelected(targetButton);
 
-        // Si le menu est fermé, l'ouvrir
-        if (!isOpen)
+        // Ne pas ouvrir automatiquement - garder l'état fermé
+        if (isOpen)
         {
-            OpenPanel();
+            ClosePanel(); // Si le menu était ouvert, le fermer
         }
     }
 
@@ -81,9 +86,10 @@ public class SwipeablePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
 
     private void ResetButtonColors()
     {
-        elementsButton.GetComponent<Image>().color = defaultButtonColor;
+        createZoneButton.GetComponent<Image>().color = defaultButtonColor;
+        assignWaiterButton.GetComponent<Image>().color = defaultButtonColor;
+        notificationsButton.GetComponent<Image>().color = defaultButtonColor;
         tablesButton.GetComponent<Image>().color = defaultButtonColor;
-        settingsButton.GetComponent<Image>().color = defaultButtonColor;
     }
 
     public void OnBeginDrag(PointerEventData eventData)
@@ -99,17 +105,14 @@ public class SwipeablePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
         float dragDelta = eventData.position.y - dragStartPos.y;
         Vector2 targetPos;
 
-        // Inverser la logique selon l'orientation
         if (isInverted)
         {
             if (isOpen)
             {
-                // Si ouvert, permet de monter jusqu'à la position avec offset
                 targetPos = originalPosition + new Vector2(0, Mathf.Clamp(dragDelta, 0, offsetY));
             }
             else
             {
-                // Si fermé, permet de descendre jusqu'à la position originale
                 targetPos = originalPosition + new Vector2(0, Mathf.Clamp(dragDelta + offsetY, 0, offsetY));
             }
         }
@@ -117,18 +120,17 @@ public class SwipeablePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
         {
             if (isOpen)
             {
-                // Si ouvert, permet de descendre jusqu'à la position avec offset
                 targetPos = originalPosition + new Vector2(0, Mathf.Clamp(dragDelta, -offsetY, 0));
             }
             else
             {
-                // Si fermé, permet de monter jusqu'à la position originale
                 targetPos = originalPosition + new Vector2(0, Mathf.Clamp(dragDelta - offsetY, -offsetY, 0));
             }
         }
 
         rectTransform.anchoredPosition = targetPos;
     }
+
     public void OnEndDrag(PointerEventData eventData)
     {
         float dragDelta = eventData.position.y - dragStartPos.y;
@@ -137,24 +139,26 @@ public class SwipeablePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
         {
             if (isInverted)
             {
-                // Logique inversée
-                if (dragDelta < 0 && !isOpen)
+                // Pour le menu inversé
+                // Si on swipe vers le haut et que le menu est ouvert -> fermer
+                // Si on swipe vers le bas et que le menu est fermé -> ouvrir
+                if (dragDelta > 0 && !isOpen)  // Swipe vers le bas quand fermé
                 {
                     OpenPanel();
                 }
-                else if (dragDelta > 0 && isOpen)
+                else if (dragDelta < 0 && isOpen)  // Swipe vers le haut quand ouvert
                 {
                     ClosePanel();
                 }
             }
             else
             {
-                // Logique normale
-                if (dragDelta > 0 && !isOpen)
+                // Logique normale (inchangée)
+                if (dragDelta > 0 && !isOpen)  // Swipe vers le haut quand fermé
                 {
                     OpenPanel();
                 }
-                else if (dragDelta < 0 && isOpen)
+                else if (dragDelta < 0 && isOpen)  // Swipe vers le bas quand ouvert
                 {
                     ClosePanel();
                 }
@@ -169,6 +173,7 @@ public class SwipeablePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
                 ClosePanel();
         }
     }
+
     private void OpenPanel()
     {
         isOpen = true;
@@ -183,7 +188,6 @@ public class SwipeablePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
         if (animationCoroutine != null)
             StopCoroutine(animationCoroutine);
 
-        // Appliquer l'offset dans la bonne direction
         float actualOffset = isInverted ? offsetY : -offsetY;
         animationCoroutine = StartCoroutine(AnimateToPosition(originalPosition + new Vector2(0, actualOffset)));
     }
@@ -202,35 +206,5 @@ public class SwipeablePanel : MonoBehaviour, IBeginDragHandler, IDragHandler, IE
         }
 
         rectTransform.anchoredPosition = targetPosition;
-    }
-
-
-    private IEnumerator AnimatePanelSize(float targetSize)
-    {
-        float startSize = rectTransform.sizeDelta.y;
-        float elapsedTime = 0f;
-
-        while (elapsedTime < animationDuration)
-        {
-            elapsedTime += Time.deltaTime;
-            float t = elapsedTime / animationDuration;
-            float newSize = Mathf.Lerp(startSize, targetSize, t);
-            rectTransform.sizeDelta = new Vector2(rectTransform.sizeDelta.x, newSize);
-            yield return null;
-        }
-
-        rectTransform.sizeDelta = new Vector2(rectTransform.sizeDelta.x, targetSize);
-
-        // Lorsque le menu est fermé, on garde le panel actif mais on ajuste sa taille
-        if (!isOpen)
-        {
-            // On ne change pas l'état des panels ici, on garde celui qui est actif
-            // mais on met à jour la taille uniquement
-        }
-    }
-
-    private void ShowPanel(GameObject panel)
-    {
-        panel.SetActive(true);
     }
 }
