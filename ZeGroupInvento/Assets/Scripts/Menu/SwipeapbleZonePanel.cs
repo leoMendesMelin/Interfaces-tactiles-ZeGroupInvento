@@ -36,11 +36,18 @@ public class SwipeableZonePanel : MonoBehaviour, IBeginDragHandler, IDragHandler
         rectTransform = GetComponent<RectTransform>();
         defaultButtonColor = createZoneButton.GetComponent<Image>().color;
 
-        // Sauvegarder la position originale (position ouverte)
+        // Sauvegarder la position originale
         originalPosition = rectTransform.anchoredPosition;
 
-        // Définir l'état fermé
-        isOpen = false;
+        // Pour le mode inversé, on commence par la position ouverte
+        if (isInverted)
+        {
+            rectTransform.anchoredPosition = originalPosition + new Vector2(0, offsetY);
+        }
+        else
+        {
+            rectTransform.anchoredPosition = originalPosition + new Vector2(0, -offsetY);
+        }
 
         // Setup initial
         createZonePanel.SetActive(true);
@@ -55,27 +62,21 @@ public class SwipeableZonePanel : MonoBehaviour, IBeginDragHandler, IDragHandler
         tablesButton.onClick.AddListener(() => SwitchPanel(tablesPanel, tablesButton));
 
         SetButtonSelected(createZoneButton);
-
-        // Forcer la fermeture du panel
-        ClosePanel();
     }
 
     private void SwitchPanel(GameObject targetPanel, Button targetButton)
     {
-        // Activer uniquement le panel ciblé
         createZonePanel.SetActive(targetPanel == createZonePanel);
         assignWaiterPanel.SetActive(targetPanel == assignWaiterPanel);
         notificationsPanel.SetActive(targetPanel == notificationsPanel);
         tablesPanel.SetActive(targetPanel == tablesPanel);
 
-        // Mettre à jour les couleurs des boutons
         ResetButtonColors();
         SetButtonSelected(targetButton);
 
-        // Ne pas ouvrir automatiquement - garder l'état fermé
-        if (isOpen)
+        if (!isOpen)
         {
-            ClosePanel(); // Si le menu était ouvert, le fermer
+            OpenPanel();
         }
     }
 
@@ -109,10 +110,12 @@ public class SwipeableZonePanel : MonoBehaviour, IBeginDragHandler, IDragHandler
         {
             if (isOpen)
             {
-                targetPos = originalPosition + new Vector2(0, Mathf.Clamp(dragDelta, 0, offsetY));
+                // Si ouvert, permet de descendre jusqu'à la position avec offset positif
+                targetPos = originalPosition + new Vector2(0, Mathf.Clamp(dragDelta + offsetY, 0, offsetY));
             }
             else
             {
+                // Si fermé, permet de descendre de la position avec offset positif
                 targetPos = originalPosition + new Vector2(0, Mathf.Clamp(dragDelta + offsetY, 0, offsetY));
             }
         }
@@ -120,10 +123,12 @@ public class SwipeableZonePanel : MonoBehaviour, IBeginDragHandler, IDragHandler
         {
             if (isOpen)
             {
+                // Si ouvert, permet de descendre jusqu'à la position avec offset négatif
                 targetPos = originalPosition + new Vector2(0, Mathf.Clamp(dragDelta, -offsetY, 0));
             }
             else
             {
+                // Si fermé, permet de monter à partir de la position avec offset négatif
                 targetPos = originalPosition + new Vector2(0, Mathf.Clamp(dragDelta - offsetY, -offsetY, 0));
             }
         }
@@ -139,26 +144,24 @@ public class SwipeableZonePanel : MonoBehaviour, IBeginDragHandler, IDragHandler
         {
             if (isInverted)
             {
-                // Pour le menu inversé
-                // Si on swipe vers le haut et que le menu est ouvert -> fermer
-                // Si on swipe vers le bas et que le menu est fermé -> ouvrir
-                if (dragDelta > 0 && !isOpen)  // Swipe vers le bas quand fermé
+                // En mode inversé, swipe down pour ouvrir, swipe up pour fermer
+                if (dragDelta > 0 && !isOpen)
                 {
-                    OpenPanel();
+                    ClosePanel(); // Ferme quand on swipe vers le bas
                 }
-                else if (dragDelta < 0 && isOpen)  // Swipe vers le haut quand ouvert
+                else if (dragDelta < 0 && isOpen)
                 {
-                    ClosePanel();
+                    OpenPanel(); // Ouvre quand on swipe vers le haut
                 }
             }
             else
             {
-                // Logique normale (inchangée)
-                if (dragDelta > 0 && !isOpen)  // Swipe vers le haut quand fermé
+                // Mode normal
+                if (dragDelta > 0 && !isOpen)
                 {
                     OpenPanel();
                 }
-                else if (dragDelta < 0 && isOpen)  // Swipe vers le bas quand ouvert
+                else if (dragDelta < 0 && isOpen)
                 {
                     ClosePanel();
                 }
@@ -166,7 +169,6 @@ public class SwipeableZonePanel : MonoBehaviour, IBeginDragHandler, IDragHandler
         }
         else
         {
-            // Retour à la position précédente
             if (isOpen)
                 OpenPanel();
             else
@@ -179,7 +181,12 @@ public class SwipeableZonePanel : MonoBehaviour, IBeginDragHandler, IDragHandler
         isOpen = true;
         if (animationCoroutine != null)
             StopCoroutine(animationCoroutine);
-        animationCoroutine = StartCoroutine(AnimateToPosition(originalPosition));
+
+        Vector2 targetPos = isInverted ?
+            originalPosition + new Vector2(0, 0) :  // Pour le mode inversé, position originale
+            originalPosition;                       // Pour le mode normal, position originale
+
+        animationCoroutine = StartCoroutine(AnimateToPosition(targetPos));
     }
 
     public void ClosePanel()
@@ -188,8 +195,11 @@ public class SwipeableZonePanel : MonoBehaviour, IBeginDragHandler, IDragHandler
         if (animationCoroutine != null)
             StopCoroutine(animationCoroutine);
 
-        float actualOffset = isInverted ? offsetY : -offsetY;
-        animationCoroutine = StartCoroutine(AnimateToPosition(originalPosition + new Vector2(0, actualOffset)));
+        Vector2 targetPos = isInverted ?
+            originalPosition + new Vector2(0, offsetY) :     // Pour le mode inversé, monter
+            originalPosition + new Vector2(0, -offsetY);     // Pour le mode normal, descendre
+
+        animationCoroutine = StartCoroutine(AnimateToPosition(targetPos));
     }
 
     private IEnumerator AnimateToPosition(Vector2 targetPosition)

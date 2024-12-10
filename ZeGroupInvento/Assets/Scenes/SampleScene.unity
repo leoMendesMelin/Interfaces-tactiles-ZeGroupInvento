@@ -2387,7 +2387,7 @@ MonoBehaviour:
   assignWaiterButton: {fileID: 753441581}
   notificationsButton: {fileID: 630316082}
   tablesButton: {fileID: 1916295965}
-  offsetY: 80
+  offsetY: -80
   swipeThreshold: 50
   animationDuration: 0.3
   isInverted: 1
@@ -8771,7 +8771,7 @@ MonoBehaviour:
   assignWaiterButton: {fileID: 802382432}
   notificationsButton: {fileID: 217949688}
   tablesButton: {fileID: 96558161}
-  offsetY: 80
+  offsetY: -80
   swipeThreshold: 50
   animationDuration: 0.3
   isInverted: 1
