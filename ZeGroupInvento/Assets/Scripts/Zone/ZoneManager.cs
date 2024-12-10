@@ -2,8 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class ZoneManager : MonoBehaviour
-{
+public class ZoneManager : MonoBehaviour //c'est le script qui créé les objets et qui les stocke 
+{// donc webcosket ça va se passer par la
     [SerializeField] private GameObject zonePrefab;
     private Dictionary<string, GameObject> zoneInstances = new Dictionary<string, GameObject>();
 

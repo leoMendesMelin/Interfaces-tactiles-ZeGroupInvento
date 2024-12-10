@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class ZoneUIElementMenu : MonoBehaviour
+public class ZoneUIElementMenu : MonoBehaviour // c'est le script qui est attaché a "Zone" quand le prefab est instancié
 {
     private string zoneId;
     private ZoneUIControllerAddDelete controller;

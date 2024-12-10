@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-public class ZoneUIControllerAddDelete : MonoBehaviour
+public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QUI EST SUR ListZone et qui permet de gérer la création d'une zone
 {
     [SerializeField] private Button addButton;
     [SerializeField] private GameObject menuZonePrefab;

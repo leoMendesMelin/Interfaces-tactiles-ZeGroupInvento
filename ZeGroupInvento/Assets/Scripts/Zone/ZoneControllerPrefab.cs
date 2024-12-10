@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-public class ZoneControllerPrefab : MonoBehaviour
+public class ZoneControllerPrefab : MonoBehaviour // c'est le script associé au prefab sur le bnackgroundPanel
 {
     private ZoneData data;
     private ZoneManager manager;
