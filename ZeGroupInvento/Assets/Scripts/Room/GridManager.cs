@@ -69,6 +69,13 @@ public class GridManager : MonoBehaviour
         }
     }
 
+    public Vector2 GetCellSize()
+    {
+        float cellWidth = backgroundPanel.rect.width / RoomManager.Instance.GetCurrentRoom().gridSize;
+        float cellHeight = backgroundPanel.rect.height / RoomManager.Instance.GetCurrentRoom().gridSize;
+        return new Vector2(cellWidth, cellHeight);
+    }
+
     private void CreateLine(bool isVertical, int index, float startX, float startY)
     {
         GameObject line = new GameObject(isVertical ? $"VerticalLine_{index}" : $"HorizontalLine_{index}");
