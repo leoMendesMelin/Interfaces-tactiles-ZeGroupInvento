@@ -6,6 +6,8 @@ public class ZoneManager : MonoBehaviour
 {
     [SerializeField] private GameObject zonePrefab;
     private Dictionary<string, GameObject> zoneInstances = new Dictionary<string, GameObject>();
+
+
     private GridManager gridManager;
 
     public void Initialize(GridManager gridManager)

@@ -5,17 +5,25 @@ using UnityEngine.UI;
 public class ZoneUIControllerAddDelete : MonoBehaviour
 {
     [SerializeField] private Button addButton;
-    [SerializeField] private GameObject menuZonePrefab; // Le prefab pour le menu
-    [SerializeField] private GameObject backgroundZonePrefab; // Le prefab pour la grille
-    [SerializeField] private RectTransform zoneContainer; // Le parent des zones dans le menu
-    [SerializeField] private RectTransform backgroundPanel; // Référence au panel de fond
+    [SerializeField] private GameObject menuZonePrefab;
+    [SerializeField] private GameObject backgroundZonePrefab;
+    [SerializeField] private RectTransform zoneContainer;
+    [SerializeField] private RectTransform backgroundPanel;
     [SerializeField] private ZoneManager zoneManager;
     [SerializeField] private GridManager gridManager;
+    [SerializeField] private GameObject addZonePrefab; // Référence au prefab AddZone
+
     private string currentSelectedZoneId;
+    private Dictionary<string, GameObject> menuZoneInstances = new Dictionary<string, GameObject>();
 
     private void Start()
     {
-        // Enlever la vérification du deleteButton car il sera créé dynamiquement
+        ValidateComponents();
+        addButton.onClick.AddListener(OnAddZoneClicked);
+    }
+
+    private void ValidateComponents()
+    {
         if (addButton == null) Debug.LogError("AddButton non assigné");
         if (menuZonePrefab == null) Debug.LogError("MenuZonePrefab non assigné");
         if (backgroundZonePrefab == null) Debug.LogError("BackgroundZonePrefab non assigné");
@@ -23,95 +31,20 @@ public class ZoneUIControllerAddDelete : MonoBehaviour
         if (backgroundPanel == null) Debug.LogError("BackgroundPanel non assigné");
         if (zoneManager == null) Debug.LogError("ZoneManager non assigné");
         if (gridManager == null) Debug.LogError("GridManager non assigné");
-
-        // Setup du listener pour le addButton uniquement
-        addButton.onClick.AddListener(OnAddZoneClicked);
     }
-
 
     private void OnAddZoneClicked()
     {
-        Debug.Log("OnAddZoneClicked called");
-
-        if (menuZonePrefab == null)
-        {
-            Debug.LogError("menuZonePrefab is null");
-            return;
-        }
-
-        if (zoneContainer == null)
-        {
-            Debug.LogError("zoneContainer is null");
-            return;
-        }
-
+        // Créer la nouvelle zone dans le menu
         GameObject menuZoneUI = Instantiate(menuZonePrefab, zoneContainer);
 
-        // La placer au début de la liste (à gauche)
-        menuZoneUI.transform.SetAsFirstSibling();
-
-        // Trouver AddZone et le mettre à la fin
-        Transform addZoneTransform = zoneContainer.Find("AddZone");
-        if (addZoneTransform != null)
-        {
-            addZoneTransform.SetAsLastSibling();
-        }
-        if (menuZoneUI == null)
-        {
-            Debug.LogError("Failed to instantiate menuZoneUI");
-            return;
-        }
-
-        ZoneUIElementMenu zoneElement = menuZoneUI.GetComponent<ZoneUIElementMenu>();
-        if (zoneElement == null)
-        {
-            Debug.LogError("ZoneUIElementMenu component not found on menuZoneUI");
-            return;
-        }
-
-        if (backgroundZonePrefab == null)
-        {
-            Debug.LogError("backgroundZonePrefab is null");
-            return;
-        }
-
-        if (backgroundPanel == null)
-        {
-            Debug.LogError("backgroundPanel is null");
-            return;
-        }
-
-        // Créer la zone interactive dans le background
-        GameObject backgroundZoneUI = Instantiate(backgroundZonePrefab, backgroundPanel);
-        if (backgroundZoneUI == null)
-        {
-            Debug.LogError("Failed to instantiate backgroundZoneUI");
-            return;
-        }
-
-        ZoneControllerPrefab zoneController = backgroundZoneUI.GetComponent<ZoneControllerPrefab>();
-        if (zoneController == null)
-        {
-            Debug.LogError("ZoneControllerPrefab component not found on backgroundZoneUI");
-            return;
-        }
-
-        if (zoneManager == null)
-        {
-            Debug.LogError("zoneManager is null");
-            return;
-        }
-
-        if (gridManager == null)
-        {
-            Debug.LogError("gridManager is null");
-            return;
-        }
+        // Générer un nouvel ID pour la zone
+        string newZoneId = System.Guid.NewGuid().ToString();
 
         // Créer les données de la zone
         ZoneData newZone = new ZoneData
         {
-            id = System.Guid.NewGuid().ToString(),
+            id = newZoneId,
             name = "New Zone",
             color = "#FF0000",
             position = new Vector2Int(5, 5),
@@ -119,38 +52,72 @@ public class ZoneUIControllerAddDelete : MonoBehaviour
             height = 3
         };
 
-        // Initialiser les deux composants
-        zoneElement.Initialize(newZone.id, this);
+        // Initialiser la zone du menu
+        ZoneUIElementMenu zoneElement = menuZoneUI.GetComponent<ZoneUIElementMenu>();
+        zoneElement.Initialize(newZoneId, this);
+
+        // Créer et initialiser la zone de fond
+        GameObject backgroundZoneUI = Instantiate(backgroundZonePrefab, backgroundPanel);
+        ZoneControllerPrefab zoneController = backgroundZoneUI.GetComponent<ZoneControllerPrefab>();
         zoneController.Initialize(newZone, zoneManager, gridManager);
 
-        // Mettre à jour le ZoneManager
-        zoneManager.RegisterZone(newZone.id, backgroundZoneUI);
+        // Enregistrer les instances
+        menuZoneInstances[newZoneId] = menuZoneUI;
+        zoneManager.RegisterZone(newZoneId, backgroundZoneUI);
+
+        // Réorganiser le layout
+        ReorganizeLayout();
     }
 
-
-    private void OnDeleteZoneClicked()
+    private void ReorganizeLayout()
     {
-        if (!string.IsNullOrEmpty(currentSelectedZoneId))
+        // Trouver l'objet AddZone
+        Transform addZoneTransform = zoneContainer.Find("AddZone");
+        if (addZoneTransform != null)
         {
-            zoneManager.DeleteZone(currentSelectedZoneId);
+            // Déplacer AddZone à la fin
+            addZoneTransform.SetAsLastSibling();
         }
+
+        // Forcer la mise à jour du layout
+        LayoutRebuilder.ForceRebuildLayoutImmediate(zoneContainer);
     }
 
+    public void OnDeleteZoneClicked(string zoneId)
+    {
+        if (string.IsNullOrEmpty(zoneId)) return;
+
+        // Supprimer la zone du background
+        zoneManager.DeleteZone(zoneId);
+
+        // Supprimer la zone du menu si elle existe
+        if (menuZoneInstances.TryGetValue(zoneId, out GameObject menuZone))
+        {
+            Destroy(menuZone);
+            menuZoneInstances.Remove(zoneId);
+        }
+
+        // Réinitialiser la sélection si nécessaire
+        if (currentSelectedZoneId == zoneId)
+        {
+            currentSelectedZoneId = null;
+        }
+
+        // Réorganiser le layout
+        ReorganizeLayout();
+    }
 
     public void OnZoneSelected(string zoneId, Button deleteButton)
     {
         currentSelectedZoneId = zoneId;
-        // Le deleteButton est maintenant passé en paramètre depuis le ZoneUIElementMenu
         deleteButton.onClick.RemoveAllListeners();
-        deleteButton.onClick.AddListener(OnDeleteZoneClicked);
+        deleteButton.onClick.AddListener(() => OnDeleteZoneClicked(zoneId));
         deleteButton.interactable = true;
     }
 
     public void OnZoneDeleted(string zoneId)
     {
-        if (currentSelectedZoneId == zoneId)
-        {
-            currentSelectedZoneId = null;
-        }
+        // Cette méthode peut être appelée par ZoneUIElementMenu
+        OnDeleteZoneClicked(zoneId);
     }
 }
