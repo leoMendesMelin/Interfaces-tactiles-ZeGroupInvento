@@ -1,38 +1,63 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-
-public class ZoneManager : MonoBehaviour //c'est le script qui créé les objets et qui les stocke 
-{// donc webcosket ça va se passer par la
-    [SerializeField] private GameObject zonePrefab;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using System.Collections.Generic;
+public class ZoneManager : MonoBehaviour
+{
+    [SerializeField] private GameObject zonePrefab;  // Vérifier dans l'inspecteur Unity que c'est bien assigné
     private Dictionary<string, GameObject> zoneInstances = new Dictionary<string, GameObject>();
-
-
     private GridManager gridManager;
+    private bool isInitialized = false;
+    [SerializeField] private RectTransform backgroundPanel; // Ajouter cette référence
+
+
 
     public void Initialize(GridManager gridManager)
     {
+        if (gridManager == null)
+        {
+            Debug.LogError("Cannot initialize ZoneManager: GridManager is null!");
+            return;
+        }
+
         this.gridManager = gridManager;
+        isInitialized = true;
+        Debug.Log("ZoneManager successfully initialized with GridManager");
     }
 
-    public string CreateZone() // Modifié pour retourner string
+    public void InstantiateZoneUI(ZoneData zoneData)
     {
-        // Créer une nouvelle zone au centre
-        ZoneData newZone = new ZoneData
+        if (zonePrefab == null || backgroundPanel == null)
         {
-            id = System.Guid.NewGuid().ToString(),
-            name = "New Zone",
-            color = "#FF0000", // Rouge par défaut
-            position = new Vector2Int(5, 5), // Position centrale approximative
-            width = 3, // Taille par défaut
-            height = 3
-        };
-        InstantiateZoneUI(newZone);
-        return newZone.id; // Retourne l'ID
+            Debug.LogError("ZonePrefab or BackgroundPanel is not assigned in ZoneManager");
+            return;
+        }
+
+        // Créer l'instance du prefab dans le BackgroundPanel
+        GameObject zoneObj = Instantiate(zonePrefab, backgroundPanel);
+
+        // Le reste du code reste identique...
+        RectTransform rectTransform = zoneObj.GetComponent<RectTransform>();
+        Vector2 cellSize = gridManager.GetCellSize();
+        rectTransform.sizeDelta = new Vector2(
+            cellSize.x * zoneData.width,
+            cellSize.y * zoneData.height
+        );
+        rectTransform.anchoredPosition = gridManager.GetWorldPosition(zoneData.position);
+
+        ZoneControllerPrefab controller = zoneObj.GetComponent<ZoneControllerPrefab>();
+        controller.Initialize(zoneData, this, gridManager);
+
+        zoneInstances[zoneData.id] = zoneObj;
     }
 
     public void RegisterZone(string zoneId, GameObject zoneInstance)
     {
+        if (string.IsNullOrEmpty(zoneId) || zoneInstance == null)
+        {
+            Debug.LogError($"Invalid parameters in RegisterZone: zoneId={zoneId}, instance={(zoneInstance != null)}");
+            return;
+        }
         zoneInstances[zoneId] = zoneInstance;
     }
 
@@ -40,28 +65,11 @@ public class ZoneManager : MonoBehaviour //c'est le script qui créé les objets e
     {
         if (zoneInstances.TryGetValue(zoneId, out GameObject zoneObj))
         {
-            Destroy(zoneObj);
+            if (zoneObj != null)
+            {
+                Destroy(zoneObj);
+            }
             zoneInstances.Remove(zoneId);
         }
-    }
-
-    private void InstantiateZoneUI(ZoneData zoneData)
-    {
-        GameObject zoneObj = Instantiate(zonePrefab, transform);
-        RectTransform rectTransform = zoneObj.GetComponent<RectTransform>();
-
-        // Positionner la zone
-        rectTransform.anchoredPosition = gridManager.GetWorldPosition(zoneData.position);
-
-        // Configurer la taille
-        float cellWidth = gridManager.GetCellSize().x;
-        float cellHeight = gridManager.GetCellSize().y;
-        rectTransform.sizeDelta = new Vector2(cellWidth * zoneData.width, cellHeight * zoneData.height);
-
-        // Initialiser le composant de manipulation
-        ZoneControllerPrefab controller = zoneObj.GetComponent<ZoneControllerPrefab>();
-        controller.Initialize(zoneData, this, gridManager);
-
-        zoneInstances[zoneData.id] = zoneObj;
     }
 }

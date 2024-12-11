@@ -18,21 +18,27 @@ public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QU
     private Dictionary<string, List<GameObject>> menuZoneInstances = new Dictionary<string, List<GameObject>>();
 
 
-    private void Start()
+    void Start()
     {
         ValidateComponents();
-        addButton.onClick.AddListener(OnAddZoneClicked);
+        if (ValidateComponents())
+        {
+            addButton.onClick.AddListener(OnAddZoneClicked);
+            zoneManager.Initialize(gridManager); // Initialiser le ZoneManager avec GridManager
+        }
     }
 
-    private void ValidateComponents()
+    private bool ValidateComponents()
     {
-        if (addButton == null) Debug.LogError("AddButton non assigné");
-        if (menuZonePrefab == null) Debug.LogError("MenuZonePrefab non assigné");
-        if (backgroundZonePrefab == null) Debug.LogError("BackgroundZonePrefab non assigné");
-        if (zoneContainer == null) Debug.LogError("ZoneContainer non assigné");
-        if (backgroundPanel == null) Debug.LogError("BackgroundPanel non assigné");
-        if (zoneManager == null) Debug.LogError("ZoneManager non assigné");
-        if (gridManager == null) Debug.LogError("GridManager non assigné");
+        bool isValid = true;
+        if (addButton == null) { Debug.LogError("AddButton non assigné"); isValid = false; }
+        if (menuZonePrefab == null) { Debug.LogError("MenuZonePrefab non assigné"); isValid = false; }
+        if (backgroundZonePrefab == null) { Debug.LogError("BackgroundZonePrefab non assigné"); isValid = false; }
+        if (zoneContainer == null) { Debug.LogError("ZoneContainer non assigné"); isValid = false; }
+        if (backgroundPanel == null) { Debug.LogError("BackgroundPanel non assigné"); isValid = false; }
+        if (zoneManager == null) { Debug.LogError("ZoneManager non assigné"); isValid = false; }
+        if (gridManager == null) { Debug.LogError("GridManager non assigné"); isValid = false; }
+        return isValid;
     }
 
     // Dans ZoneUIControllerAddDelete.cs
@@ -44,18 +50,22 @@ public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QU
         // Obtenir une couleur unique
         string zoneColor = ColorManager.Instance.GetUniqueColor();
 
-        // Créer les données de la zone
+        // Calculer la position centrale de la grille
+        int gridSize = RoomManager.Instance.GetCurrentRoom().gridSize;
+        Vector2Int centerPosition = new Vector2Int(gridSize / 2, gridSize / 2);
+
+        // Créer les données de la zone au centre
         ZoneData newZone = new ZoneData
         {
             id = newZoneId,
             name = "New Zone",
             color = zoneColor,
-            position = new Vector2Int(5, 5),
-            width = 3,
-            height = 3
+            position = centerPosition, // Utiliser la position centrale
+            width = 6,
+            height = 6
         };
 
-        // Trouver tous les ListZones dans la scène
+        // Le reste du code reste identique...
         Transform[] allListZones = GameObject.FindObjectsOfType<Transform>()
                                            .Where(t => t.name == "ListZones")
                                            .ToArray();
@@ -64,10 +74,7 @@ public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QU
 
         foreach (Transform listZone in allListZones)
         {
-            // Créer la nouvelle zone dans chaque menu
             GameObject menuZoneUI = Instantiate(menuZonePrefab, listZone);
-
-            // Initialiser la zone du menu
             ZoneUIElementMenu zoneElement = menuZoneUI.GetComponent<ZoneUIElementMenu>();
             zoneElement.Initialize(newZoneId, this);
 
@@ -83,31 +90,17 @@ public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QU
             }
 
             instances.Add(menuZoneUI);
-
-            // Réorganiser le layout pour ce ListZone
             ReorganizeLayout(listZone);
         }
 
-        // Créer et initialiser la zone de fond
-        GameObject backgroundZoneUI = Instantiate(backgroundZonePrefab, backgroundPanel);
-        ZoneControllerPrefab zoneController = backgroundZoneUI.GetComponent<ZoneControllerPrefab>();
-        zoneController.Initialize(newZone, zoneManager, gridManager);
+        // Laisser le ZoneManager gérer la création de la zone
+        zoneManager.InstantiateZoneUI(newZone);
 
-        // Appliquer la même couleur au background zone
-        Image backgroundZoneImage = backgroundZoneUI.GetComponent<Image>();
-        if (backgroundZoneImage != null)
-        {
-            Color newColor;
-            if (ColorUtility.TryParseHtmlString(zoneColor, out newColor))
-            {
-                backgroundZoneImage.color = new Color(newColor.r, newColor.g, newColor.b, 0.5f);
-            }
-        }
-
-        // Enregistrer toutes les instances
+        // Enregistrer les instances de menu
         menuZoneInstances[newZoneId] = instances;
-        zoneManager.RegisterZone(newZoneId, backgroundZoneUI);
     }
+
+
 
 
     private void ReorganizeLayout(Transform listZoneTransform)
