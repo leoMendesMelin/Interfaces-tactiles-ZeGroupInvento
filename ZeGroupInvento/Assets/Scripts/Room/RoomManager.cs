@@ -14,6 +14,7 @@ public class RoomManager : MonoBehaviour
     private GridUIManager gridUIManager;
 
     [SerializeField] private RoomNetworkService networkService;
+    private ZoneManager zoneManager;
 
     private void Awake()
     {
@@ -34,6 +35,7 @@ public class RoomManager : MonoBehaviour
         var backgroundPanel = GameObject.Find("BackgroundPanel").GetComponent<RectTransform>();
         gridManager = FindObjectOfType<GridManager>();
         gridUIManager = FindObjectOfType<GridUIManager>();
+        zoneManager = FindObjectOfType<ZoneManager>();
 
         gridManager.Initialize(backgroundPanel);
         gridUIManager.Initialize(backgroundPanel);
@@ -47,6 +49,14 @@ public class RoomManager : MonoBehaviour
         currentRoom = room;
         gridManager.CreateGrid(currentRoom.gridSize);
         gridUIManager.DisplayElements(currentRoom.elements);
+
+        if (currentRoom.zones != null && zoneManager != null)
+        {
+            foreach (var zone in currentRoom.zones)
+            {
+                zoneManager.UpdateZone(zone);
+            }
+        }
     }
 
     public void AddElement(string type, Vector2Int gridPosition, float rotation)

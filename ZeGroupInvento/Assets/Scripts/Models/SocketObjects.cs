@@ -17,3 +17,9 @@ public class WebSocketRoomMessage : WebSocketMessage
 {
     public Room room;
 }
+
+[Serializable]
+public class ZoneDataArray
+{
+    public ZoneData[] zones;
+}

@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using System.Collections.Generic;
+using System.Collections;
+using UnityEngine.Networking;
 public class ZoneManager : MonoBehaviour
 {
     [SerializeField] private GameObject zonePrefab;  // Vérifier dans l'inspecteur Unity que c'est bien assigné
@@ -10,7 +12,64 @@ public class ZoneManager : MonoBehaviour
     private bool isInitialized = false;
     [SerializeField] private RectTransform backgroundPanel; // Ajouter cette référence
 
+    private const string SERVER_URL = "http://localhost:9090";
 
+
+
+    public IEnumerator FetchRoom(System.Action<Room> onSuccess)
+    {
+        using (UnityWebRequest request = UnityWebRequest.Get($"{SERVER_URL}/room"))
+        {
+            yield return request.SendWebRequest();
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string jsonResponse = request.downloadHandler.text;
+                jsonResponse = jsonResponse.TrimStart('[').TrimEnd(']');
+                Room room = JsonUtility.FromJson<Room>(jsonResponse);
+
+                // Récupérer les zones pour cette room
+                if (room != null)
+                {
+                    StartCoroutine(FetchZones(room, onSuccess));
+                }
+                else
+                {
+                    onSuccess?.Invoke(null);
+                }
+            }
+        }
+    }
+
+    private IEnumerator FetchZones(Room room, System.Action<Room> onSuccess)
+    {
+        using (UnityWebRequest request = UnityWebRequest.Get($"{SERVER_URL}/room/{room.id}/zones"))
+        {
+            yield return request.SendWebRequest();
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                string jsonResponse = request.downloadHandler.text;
+                // Désérialiser le tableau de zones
+                ZoneData[] zones = JsonUtility.FromJson<ZoneDataArray>($"{{\"zones\":{jsonResponse}}}").zones;
+                room.zones = zones;
+                onSuccess?.Invoke(room);
+
+                // Créer les UI des zones
+                ZoneManager zoneManager = FindObjectOfType<ZoneManager>();
+                if (zoneManager != null && zones != null)
+                {
+                    foreach (var zone in zones)
+                    {
+                        zoneManager.UpdateZone(zone);
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError($"Error fetching zones: {request.error}");
+                onSuccess?.Invoke(room);
+            }
+        }
+    }
 
     public void Initialize(GridManager gridManager)
     {
