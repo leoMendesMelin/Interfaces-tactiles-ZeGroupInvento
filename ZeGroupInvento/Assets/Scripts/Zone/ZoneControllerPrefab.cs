@@ -18,6 +18,8 @@ public class ZoneControllerPrefab : MonoBehaviour,
     private bool isDragging = false;
     private Vector2 lastGridPosition;
 
+    private ZoneWebSocketManager webSocketManager;
+
     // Variables pour le pinch-to-zoom
     private bool isPinching = false;
     private float initialPinchDistance;
@@ -29,6 +31,12 @@ public class ZoneControllerPrefab : MonoBehaviour,
         {
             Debug.LogError($"Null references in Initialize: data={data != null}, manager={manager != null}, gridManager={gridManager != null}");
             return;
+        }
+
+        webSocketManager = FindObjectOfType<ZoneWebSocketManager>();
+        if (webSocketManager == null)
+        {
+            Debug.LogError("ZoneWebSocketManager not found in scene");
         }
 
         this.data = data;
@@ -101,6 +109,11 @@ public class ZoneControllerPrefab : MonoBehaviour,
                     cellSize.x * data.width,
                     cellSize.y * data.height
                 );
+
+                if (webSocketManager != null)
+                {
+                    webSocketManager.EmitZoneUpdated(data);
+                }
             }
 
             if (touchZero.phase == TouchPhase.Ended || touchOne.phase == TouchPhase.Ended)
@@ -241,6 +254,10 @@ public class ZoneControllerPrefab : MonoBehaviour,
         Vector2 finalWorldPos = gridManager.GetWorldPosition(finalGridPos);
         rectTransform.anchoredPosition = finalWorldPos;
         data.position = finalGridPos;
+        if (webSocketManager != null)
+        {
+            webSocketManager.EmitZoneUpdated(data);
+        }
     }
 
     public void OnDelete()

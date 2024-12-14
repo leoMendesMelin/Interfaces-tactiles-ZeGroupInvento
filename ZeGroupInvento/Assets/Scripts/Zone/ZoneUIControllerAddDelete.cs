@@ -17,6 +17,8 @@ public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QU
     private string currentSelectedZoneId;
     private Dictionary<string, List<GameObject>> menuZoneInstances = new Dictionary<string, List<GameObject>>();
 
+    private ZoneWebSocketManager webSocketManager;
+
 
     void Start()
     {
@@ -25,6 +27,12 @@ public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QU
         {
             addButton.onClick.AddListener(OnAddZoneClicked);
             zoneManager.Initialize(gridManager); // Initialiser le ZoneManager avec GridManager
+        }
+        webSocketManager = FindObjectOfType<ZoneWebSocketManager>();
+
+        if (webSocketManager == null)
+        {
+            Debug.LogError("ZoneWebSocketManager not found in scene");
         }
     }
 
@@ -98,6 +106,11 @@ public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QU
 
         // Enregistrer les instances de menu
         menuZoneInstances[newZoneId] = instances;
+
+        if (webSocketManager != null)
+        {
+            webSocketManager.EmitZoneCreated(newZone);
+        }
     }
 
 
@@ -121,11 +134,35 @@ public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QU
     {
         if (string.IsNullOrEmpty(zoneId)) return;
 
+        // Récupérer les données de la zone avant de la supprimer
+        ZoneData zoneToDelete = null;
+        if (menuZoneInstances.TryGetValue(zoneId, out List<GameObject> menuZones) &&
+            menuZones.Count > 0 &&
+            menuZones[0] != null)
+        {
+            Image image = menuZones[0].GetComponent<Image>();
+            if (image != null)
+            {
+                string colorHex = "#" + ColorUtility.ToHtmlStringRGB(image.color);
+                zoneToDelete = new ZoneData
+                {
+                    id = zoneId,
+                    color = colorHex
+                };
+            }
+        }
+
         ReleaseZoneColor(zoneId);
         DeleteMenuInstances(zoneId);
         DeleteBackgroundZone(zoneId);
         ResetSelectedZoneIfNeeded(zoneId);
         ReorganizeAllLayouts();
+
+        // Envoyer l'événement de suppression via WebSocket
+        if (webSocketManager != null && zoneToDelete != null)
+        {
+            webSocketManager.EmitZoneDeleted(zoneToDelete);
+        }
     }
 
     private void ReleaseZoneColor(string zoneId)

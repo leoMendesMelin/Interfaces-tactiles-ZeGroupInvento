@@ -29,6 +29,7 @@ public class Room
     public string id;
     public int gridSize;
     public RoomElement[] elements;
+    public ZoneData[] zones; // Ajout de la propriété zones
 }
 
 

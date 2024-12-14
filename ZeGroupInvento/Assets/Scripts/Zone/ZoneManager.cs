@@ -72,4 +72,44 @@ public class ZoneManager : MonoBehaviour
             zoneInstances.Remove(zoneId);
         }
     }
+
+    public void UpdateZone(ZoneData zoneData)
+    {
+        if (!isInitialized || zoneData == null)
+        {
+            Debug.LogError("Cannot update zone: ZoneManager not initialized or zoneData is null");
+            return;
+        }
+
+        if (zoneInstances.TryGetValue(zoneData.id, out GameObject zoneInstance))
+        {
+            // Mettre à jour la position et la taille
+            RectTransform rectTransform = zoneInstance.GetComponent<RectTransform>();
+            if (rectTransform != null)
+            {
+                // Mettre à jour la position
+                Vector2 worldPosition = gridManager.GetWorldPosition(zoneData.position);
+                rectTransform.anchoredPosition = worldPosition;
+
+                // Mettre à jour la taille
+                Vector2 cellSize = gridManager.GetCellSize();
+                rectTransform.sizeDelta = new Vector2(
+                    cellSize.x * zoneData.width,
+                    cellSize.y * zoneData.height
+                );
+            }
+
+            // Mettre à jour la couleur si nécessaire
+            ZoneControllerPrefab controller = zoneInstance.GetComponent<ZoneControllerPrefab>();
+            if (controller != null)
+            {
+                controller.UpdateColor(zoneData.color);
+            }
+        }
+        else
+        {
+            // Si la zone n'existe pas, la créer
+            InstantiateZoneUI(zoneData);
+        }
+    }
 }
