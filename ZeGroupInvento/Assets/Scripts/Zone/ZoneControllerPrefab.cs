@@ -146,6 +146,41 @@ public class ZoneControllerPrefab : MonoBehaviour,
         return false;
     }
 
+    // Ajouter ces méthodes à la classe ZoneControllerPrefab
+
+    public void AssignWaiter(WaiterData waiter)
+    {
+        if (data.assignedServers == null)
+        {
+            data.assignedServers = new List<WaiterData>();
+        }
+
+        if (!data.assignedServers.Exists(w => w.id == waiter.id))
+        {
+            data.assignedServers.Add(waiter);
+
+            // Émettre la mise à jour via WebSocket si nécessaire
+            if (webSocketManager != null)
+            {
+                webSocketManager.EmitZoneUpdated(data);
+            }
+        }
+    }
+
+    public void UnassignWaiter(string waiterId)
+    {
+        if (data.assignedServers != null)
+        {
+            data.assignedServers.RemoveAll(w => w.id == waiterId);
+
+            // Émettre la mise à jour via WebSocket si nécessaire
+            if (webSocketManager != null)
+            {
+                webSocketManager.EmitZoneUpdated(data);
+            }
+        }
+    }
+
 
 
     public void OnPointerDown(PointerEventData eventData)

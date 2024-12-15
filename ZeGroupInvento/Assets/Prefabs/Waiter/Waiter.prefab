@@ -219,6 +219,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2936809639480284727}
   - component: {fileID: 4817777762348996334}
+  - component: {fileID: 6635361414233269534}
   m_Layer: 5
   m_Name: Waiter
   m_TagString: Untagged
@@ -261,7 +262,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   background: {fileID: 7488740695459013255}
-  nameText: {fileID: 0}
+  nameText: {fileID: 1228901442466068531}
+--- !u!114 &6635361414233269534
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2576432136013269077}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59c2fd0f888f01a4e9ee141117c48810, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &3515758722762536395
 GameObject:
   m_ObjectHideFlags: 0
