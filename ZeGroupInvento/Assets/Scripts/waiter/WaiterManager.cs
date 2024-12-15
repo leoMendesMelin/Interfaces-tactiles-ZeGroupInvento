@@ -110,7 +110,7 @@ public class WaiterManager : MonoBehaviour
 
 
 
-    public void UpdateWaiters(List<WaiterData> assignedWaiters, List<WaiterData> nonAssignedWaiters)
+    public void UpdateWaiters(List<WaiterData> assignedWaiters, List<WaiterData> nonAssignedWaiters, Dictionary<string, Color> waiterColors)
     {
         if (waiterPrefab == null)
         {
@@ -144,7 +144,15 @@ public class WaiterManager : MonoBehaviour
         // Créer les waiters assignés uniques
         foreach (var waiter in uniqueAssignedWaiters)
         {
-            CreateWaiterInstances(waiter, true);
+            if (waiterColors.TryGetValue(waiter.id, out Color zoneColor))
+            {
+                Color colorWithAlpha = new Color(zoneColor.r, zoneColor.g, zoneColor.b, 0.5f);
+                CreateWaiterInstances(waiter, true, colorWithAlpha);
+            }
+            else
+            {
+                CreateWaiterInstances(waiter, true);
+            }
         }
 
         // Créer les waiters non-assignés
@@ -152,7 +160,7 @@ public class WaiterManager : MonoBehaviour
         {
             foreach (var waiter in nonAssignedWaiters)
             {
-                if (!assignedWaiterIds.Contains(waiter.id))  // Ne créer que s'il n'est pas déjà assigné
+                if (!assignedWaiterIds.Contains(waiter.id))
                 {
                     CreateWaiterInstances(waiter, false);
                     Debug.Log($"Creating non-assigned waiter: {waiter.name}");
@@ -215,6 +223,60 @@ public class WaiterManager : MonoBehaviour
         }
     }
 
+    private void CreateWaiterInstances(WaiterData waiterData, bool isAssigned, Color color)
+    {
+        if (waiterPrefab == null) return;
+
+        var targetGrids = isAssigned ? assignedGrids : nonAssignedGrids;
+        if (targetGrids == null || targetGrids.Count == 0)
+        {
+            Debug.LogError($"No {(isAssigned ? "assigned" : "non-assigned")} grids found!");
+            return;
+        }
+
+        List<WaiterUI> instances = new List<WaiterUI>();
+
+        foreach (var grid in targetGrids)
+        {
+            if (grid == null) continue;
+
+            try
+            {
+                bool wasActive = grid.gameObject.activeSelf;
+                grid.gameObject.SetActive(true);
+
+                GameObject waiterObj = Instantiate(waiterPrefab, grid);
+                waiterObj.name = $"Waiter_{waiterData.name}";
+                waiterObj.SetActive(true);
+
+                WaiterUI waiterUI = waiterObj.GetComponent<WaiterUI>();
+                if (waiterUI != null)
+                {
+                    waiterUI.Initialize(waiterData);
+                    waiterUI.SetBackgroundColor(color);
+                    instances.Add(waiterUI);
+                    Debug.Log($"Created {(isAssigned ? "assigned" : "non-assigned")} waiter: {waiterData.name}");
+                }
+
+                grid.gameObject.SetActive(wasActive);
+
+                // Forcer la mise à jour du layout
+                if (grid is RectTransform rectTransform)
+                {
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(rectTransform);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Error creating waiter instance: {e.Message}");
+            }
+        }
+
+        if (instances.Count > 0)
+        {
+            waiterInstances[waiterData.id] = instances;
+        }
+    }
     public void UpdateWaiterStatus(string waiterId, string newStatus)
     {
         if (waiterInstances.TryGetValue(waiterId, out List<WaiterUI> instances))

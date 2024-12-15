@@ -69,6 +69,13 @@ public class WaiterUI : MonoBehaviour
         }
     }
 
+    public void SetBackgroundColor(Color color)
+    {
+        if (background != null)
+        {
+            background.color = color;
+        }
+    }
     private void OnEnable()
     {
         // S'assurer que l'image de fond peut recevoir les raycasts

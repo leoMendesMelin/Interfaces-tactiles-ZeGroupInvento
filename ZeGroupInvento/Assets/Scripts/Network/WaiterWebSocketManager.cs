@@ -69,6 +69,7 @@ public class WaiterWebSocketManager : MonoBehaviour
         // Extraire les waiters assignés des zones en évitant les doublons
         HashSet<string> processedWaiterIds = new HashSet<string>();
         List<WaiterData> assignedWaiters = new List<WaiterData>();
+        Dictionary<string, Color> waiterColors = new Dictionary<string, Color>();
 
         if (room?.zones != null)
         {
@@ -76,13 +77,17 @@ public class WaiterWebSocketManager : MonoBehaviour
             {
                 if (zone.assignedServers != null)
                 {
-                    foreach (var waiter in zone.assignedServers)
+                    Color zoneColor;
+                    if (ColorUtility.TryParseHtmlString(zone.color, out zoneColor))
                     {
-                        // N'ajouter le waiter que s'il n'a pas déjà été traité
-                        if (!processedWaiterIds.Contains(waiter.id))
+                        foreach (var waiter in zone.assignedServers)
                         {
-                            assignedWaiters.Add(waiter);
-                            processedWaiterIds.Add(waiter.id);
+                            if (!processedWaiterIds.Contains(waiter.id))
+                            {
+                                assignedWaiters.Add(waiter);
+                                processedWaiterIds.Add(waiter.id);
+                                waiterColors[waiter.id] = zoneColor;
+                            }
                         }
                     }
                 }
@@ -92,10 +97,11 @@ public class WaiterWebSocketManager : MonoBehaviour
         Debug.Log($"Found {assignedWaiters.Count} unique assigned waiters");
         Debug.Log($"Found {nonAssignedWaiters?.Count ?? 0} non-assigned waiters");
 
-        // Mettre à jour les UI via le WaiterManager avec les waiters uniques
+        // Mettre à jour les UI via le WaiterManager
         WaiterManager.Instance.UpdateWaiters(
             assignedWaiters,
-            nonAssignedWaiters
+            nonAssignedWaiters,
+            waiterColors
         );
     }
 

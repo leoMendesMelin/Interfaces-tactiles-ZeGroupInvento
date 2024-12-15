@@ -1,8 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
 using System;
+using System.Linq; // Pour Select et ToDictionary
 using Newtonsoft.Json;
 using NativeWebSocket;
 using System.Threading.Tasks;
@@ -175,20 +175,31 @@ public class ZoneWebSocketManager : MonoBehaviour
                             }
                         }
 
-                        // Extraire les serveurs assignés
+                        Dictionary<string, Color> waiterColors = new Dictionary<string, Color>();
                         List<WaiterData> assignedWaiters = new List<WaiterData>();
+
                         foreach (var zone in roomMessage.room.zones)
                         {
-                            if (zone.assignedServers != null)
+                            if (zone.assignedServers != null && !string.IsNullOrEmpty(zone.color))
                             {
-                                assignedWaiters.AddRange(zone.assignedServers);
+                                Color zoneColor;
+                                if (ColorUtility.TryParseHtmlString(zone.color, out zoneColor))
+                                {
+                                    foreach (var waiter in zone.assignedServers)
+                                    {
+                                        assignedWaiters.Add(waiter);
+                                        waiterColors[waiter.id] = zoneColor;
+                                    }
+                                }
                             }
                         }
+
                         if (waiterManager != null)
                         {
                             waiterManager.UpdateWaiters(
                                 assignedWaiters,
-                                roomMessage.nonAssignedWaiters // Les waiters non assignés viennent du serveur
+                                roomMessage.nonAssignedWaiters,
+                                waiterColors
                             );
                         }
                     }
