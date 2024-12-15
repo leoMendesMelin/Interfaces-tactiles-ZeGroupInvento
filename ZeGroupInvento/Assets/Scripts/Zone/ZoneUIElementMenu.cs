@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 public class ZoneUIElementMenu : MonoBehaviour // c'est le script qui est attaché a "Zone" quand le prefab est instancié
 {
-    private string zoneId;
+    public string zoneId;
     private ZoneUIControllerAddDelete controller;
     private Button deleteButton;
 

@@ -13,9 +13,10 @@ public class ZoneUIControllerAddDelete : MonoBehaviour // C'EST LE CONTROLLER QU
     [SerializeField] private ZoneManager zoneManager;
     [SerializeField] private GridManager gridManager;
     [SerializeField] private GameObject addZonePrefab; // Référence au prefab AddZone
+    public GameObject MenuZonePrefab => menuZonePrefab;
 
     private string currentSelectedZoneId;
-    private Dictionary<string, List<GameObject>> menuZoneInstances = new Dictionary<string, List<GameObject>>();
+    public Dictionary<string, List<GameObject>> menuZoneInstances = new Dictionary<string, List<GameObject>>();
 
     private ZoneWebSocketManager webSocketManager;
 
