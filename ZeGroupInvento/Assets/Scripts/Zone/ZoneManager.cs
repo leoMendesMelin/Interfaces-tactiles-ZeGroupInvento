@@ -41,35 +41,44 @@ public class ZoneManager : MonoBehaviour
     }
 
     private IEnumerator FetchZones(Room room, System.Action<Room> onSuccess)
+{
+    using (UnityWebRequest request = UnityWebRequest.Get($"{SERVER_URL}/room/{room.id}/zones"))
     {
-        using (UnityWebRequest request = UnityWebRequest.Get($"{SERVER_URL}/room/{room.id}/zones"))
+        yield return request.SendWebRequest();
+        if (request.result == UnityWebRequest.Result.Success)
         {
-            yield return request.SendWebRequest();
-            if (request.result == UnityWebRequest.Result.Success)
-            {
-                string jsonResponse = request.downloadHandler.text;
-                // Désérialiser le tableau de zones
-                ZoneData[] zones = JsonUtility.FromJson<ZoneDataArray>($"{{\"zones\":{jsonResponse}}}").zones;
-                room.zones = zones;
-                onSuccess?.Invoke(room);
+            string jsonResponse = request.downloadHandler.text;
+            ZoneData[] zones = JsonUtility.FromJson<ZoneDataArray>($"{{\"zones\":{jsonResponse}}}").zones;
+            room.zones = zones;
+            onSuccess?.Invoke(room);
 
-                // Créer les UI des zones
-                ZoneManager zoneManager = FindObjectOfType<ZoneManager>();
-                if (zoneManager != null && zones != null)
+            // Créer les UI des zones et les éléments de menu
+            if (zones != null)
+            {
+                // Trouver le ZoneUIControllerAddDelete de manière plus robuste
+                ZoneUIControllerAddDelete menuController = FindObjectOfType<ZoneUIControllerAddDelete>();
+                
+                if (menuController == null)
                 {
-                    foreach (var zone in zones)
-                    {
-                        zoneManager.UpdateZone(zone);
-                    }
+                    Debug.LogError("ZoneUIControllerAddDelete not found in scene");
+                    yield break;
+                }
+
+                foreach (var zone in zones)
+                {
+                    UpdateZone(zone);
+                    
+                    yield return new WaitForEndOfFrame();
                 }
             }
-            else
-            {
-                Debug.LogError($"Error fetching zones: {request.error}");
-                onSuccess?.Invoke(room);
-            }
+        }
+        else
+        {
+            Debug.LogError($"Error fetching zones: {request.error}");
+            onSuccess?.Invoke(room);
         }
     }
+}
 
     public void Initialize(GridManager gridManager)
     {

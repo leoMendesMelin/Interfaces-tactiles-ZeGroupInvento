@@ -41,7 +41,16 @@ public class ZoneData
     public string id;
     public string name;
     public string color;
-    public Vector2Int position; // Position sur la grille
-    public int width; // Taille horizontale
-    public int height; // Taille verticale
+    public Vector2Int position;
+    public int width;
+    public int height;
+    public List<WaiterData> assignedServers;
+    public List<Vector2Int> bounds;
+}
+[Serializable]
+public class WaiterData
+{
+    public string id;
+    public string name;
+    public string status;
 }

@@ -1,5 +1,7 @@
+// Mettre à jour SocketObjects.cs
 using System;
-// Classes pour la désérialisation des messages
+using System.Collections.Generic;
+
 [Serializable]
 public class WebSocketMessage
 {
@@ -16,6 +18,13 @@ public class WebSocketElementMessage : WebSocketMessage
 public class WebSocketRoomMessage : WebSocketMessage
 {
     public Room room;
+}
+
+[Serializable]
+public class WebSocketRoomDataMessage : WebSocketMessage
+{
+    public Room room;
+    public List<WaiterData> nonAssignedWaiters;
 }
 
 [Serializable]
