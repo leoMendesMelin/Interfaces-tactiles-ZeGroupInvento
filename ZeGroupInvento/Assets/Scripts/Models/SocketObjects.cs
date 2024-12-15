@@ -18,6 +18,7 @@ public class WebSocketElementMessage : WebSocketMessage
 public class WebSocketRoomMessage : WebSocketMessage
 {
     public Room room;
+    public List<WaiterData> nonAssignedWaiters;
 }
 
 [Serializable]
@@ -31,4 +32,11 @@ public class WebSocketRoomDataMessage : WebSocketMessage
 public class ZoneDataArray
 {
     public ZoneData[] zones;
+}
+
+// Ajouter cette classe si elle n'existe pas déjà
+[Serializable]
+public class WebSocketWaiterMessage : WebSocketMessage
+{
+    public WaiterData waiter;
 }

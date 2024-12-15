@@ -14,11 +14,15 @@ public class ZoneWebSocketManager : MonoBehaviour
     private RoomManager roomManager;
     private ZoneManager zoneManager;
     private HashSet<string> processingZones = new HashSet<string>();
+    private WaiterManager waiterManager;
+
 
     private void Start()
     {
         roomManager = RoomManager.Instance;
         zoneManager = FindObjectOfType<ZoneManager>();
+        waiterManager = FindObjectOfType<WaiterManager>();
+
         ConnectToServer();
     }
 
@@ -169,6 +173,23 @@ public class ZoneWebSocketManager : MonoBehaviour
                                 zoneManager.UpdateZone(zone);
                                 processingZones.Remove(zone.id);
                             }
+                        }
+
+                        // Extraire les serveurs assignés
+                        List<WaiterData> assignedWaiters = new List<WaiterData>();
+                        foreach (var zone in roomMessage.room.zones)
+                        {
+                            if (zone.assignedServers != null)
+                            {
+                                assignedWaiters.AddRange(zone.assignedServers);
+                            }
+                        }
+                        if (waiterManager != null)
+                        {
+                            waiterManager.UpdateWaiters(
+                                assignedWaiters,
+                                roomMessage.nonAssignedWaiters // Les waiters non assignés viennent du serveur
+                            );
                         }
                     }
                     break;

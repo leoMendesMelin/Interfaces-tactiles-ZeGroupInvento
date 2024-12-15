@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
 using System;
+using UnityEngine.UI;  // Pour LayoutGroup et LayoutRebuilder
 
 public class WaiterManager : MonoBehaviour
 {
@@ -111,42 +112,61 @@ public class WaiterManager : MonoBehaviour
 
     public void UpdateWaiters(List<WaiterData> assignedWaiters, List<WaiterData> nonAssignedWaiters)
     {
-        Debug.Log($"UpdateWaiters called with {assignedWaiters?.Count ?? 0} assigned and {nonAssignedWaiters?.Count ?? 0} non-assigned waiters");
-
         if (waiterPrefab == null)
         {
             Debug.LogError("Waiter prefab is not assigned!");
             return;
         }
 
+        Debug.Log($"Starting UpdateWaiters with {assignedWaiters?.Count ?? 0} assigned and {nonAssignedWaiters?.Count ?? 0} non-assigned");
+
+        // HashSet pour suivre les waiters déjà traités et éviter les doublons
+        HashSet<string> assignedWaiterIds = new HashSet<string>();
+
+        // Traiter d'abord les waiters assignés (ceux des zones)
+        List<WaiterData> uniqueAssignedWaiters = new List<WaiterData>();
+        if (assignedWaiters != null)
+        {
+            foreach (var waiter in assignedWaiters)
+            {
+                if (!assignedWaiterIds.Contains(waiter.id))
+                {
+                    uniqueAssignedWaiters.Add(waiter);
+                    assignedWaiterIds.Add(waiter.id);
+                    Debug.Log($"Adding unique assigned waiter: {waiter.name}");
+                }
+            }
+        }
+
+        // Nettoyer toutes les instances existantes
         ClearAllWaiters();
 
-        // Créer les waiters assignés
-        foreach (var waiter in assignedWaiters ?? new List<WaiterData>())
+        // Créer les waiters assignés uniques
+        foreach (var waiter in uniqueAssignedWaiters)
         {
             CreateWaiterInstances(waiter, true);
         }
 
         // Créer les waiters non-assignés
-        foreach (var waiter in nonAssignedWaiters ?? new List<WaiterData>())
+        if (nonAssignedWaiters != null)
         {
-            Debug.Log($"Creating non-assigned waiter: {waiter.name}");
-            CreateWaiterInstances(waiter, false);
+            foreach (var waiter in nonAssignedWaiters)
+            {
+                if (!assignedWaiterIds.Contains(waiter.id))  // Ne créer que s'il n'est pas déjà assigné
+                {
+                    CreateWaiterInstances(waiter, false);
+                    Debug.Log($"Creating non-assigned waiter: {waiter.name}");
+                }
+            }
         }
     }
 
     private void CreateWaiterInstances(WaiterData waiterData, bool isAssigned)
     {
-        if (waiterPrefab == null)
-        {
-            Debug.LogError("Waiter prefab is not assigned in WaiterManager!");
-            return;
-        }
+        if (waiterPrefab == null) return;
 
         var targetGrids = isAssigned ? assignedGrids : nonAssignedGrids;
-        Debug.Log($"Creating {(isAssigned ? "assigned" : "non-assigned")} waiter {waiterData.name} in {targetGrids.Count} grids");
-
-        if (targetGrids.Count == 0)
+        if (targetGrids == null || targetGrids.Count == 0)
         {
             Debug.LogError($"No {(isAssigned ? "assigned" : "non-assigned")} grids found!");
             return;
@@ -156,40 +176,43 @@ public class WaiterManager : MonoBehaviour
 
         foreach (var grid in targetGrids)
         {
+            if (grid == null) continue;
+
             try
             {
-                // Activer temporairement le parent pour permettre l'instantiation
                 bool wasActive = grid.gameObject.activeSelf;
                 grid.gameObject.SetActive(true);
 
                 GameObject waiterObj = Instantiate(waiterPrefab, grid);
                 waiterObj.name = $"Waiter_{waiterData.name}";
-
-                // S'assurer que le waiter est actif
                 waiterObj.SetActive(true);
 
                 WaiterUI waiterUI = waiterObj.GetComponent<WaiterUI>();
-                if (waiterUI == null)
+                if (waiterUI != null)
                 {
-                    Debug.LogError("WaiterUI component not found on instantiated prefab!");
-                    continue;
+                    waiterUI.Initialize(waiterData);
+                    instances.Add(waiterUI);
+                    Debug.Log($"Created {(isAssigned ? "assigned" : "non-assigned")} waiter: {waiterData.name}");
                 }
 
-                waiterUI.Initialize(waiterData);
-                instances.Add(waiterUI);
-
-                Debug.Log($"Successfully created waiter {waiterData.name} in {grid.name}");
-
-                // Restaurer l'état d'activation original
                 grid.gameObject.SetActive(wasActive);
+
+                // Forcer la mise à jour du layout
+                if (grid is RectTransform rectTransform)
+                {
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(rectTransform);
+                }
             }
             catch (Exception e)
             {
-                Debug.LogError($"Error creating waiter instance: {e}");
+                Debug.LogError($"Error creating waiter instance: {e.Message}");
             }
         }
 
-        waiterInstances[waiterData.id] = instances;
+        if (instances.Count > 0)
+        {
+            waiterInstances[waiterData.id] = instances;
+        }
     }
 
     public void UpdateWaiterStatus(string waiterId, string newStatus)

@@ -64,6 +64,41 @@ public class WaiterWebSocketManager : MonoBehaviour
         }
     }
 
+    private void UpdateWaiterDisplay(Room room, List<WaiterData> nonAssignedWaiters)
+    {
+        // Extraire les waiters assignés des zones en évitant les doublons
+        HashSet<string> processedWaiterIds = new HashSet<string>();
+        List<WaiterData> assignedWaiters = new List<WaiterData>();
+
+        if (room?.zones != null)
+        {
+            foreach (var zone in room.zones)
+            {
+                if (zone.assignedServers != null)
+                {
+                    foreach (var waiter in zone.assignedServers)
+                    {
+                        // N'ajouter le waiter que s'il n'a pas déjà été traité
+                        if (!processedWaiterIds.Contains(waiter.id))
+                        {
+                            assignedWaiters.Add(waiter);
+                            processedWaiterIds.Add(waiter.id);
+                        }
+                    }
+                }
+            }
+        }
+
+        Debug.Log($"Found {assignedWaiters.Count} unique assigned waiters");
+        Debug.Log($"Found {nonAssignedWaiters?.Count ?? 0} non-assigned waiters");
+
+        // Mettre à jour les UI via le WaiterManager avec les waiters uniques
+        WaiterManager.Instance.UpdateWaiters(
+            assignedWaiters,
+            nonAssignedWaiters
+        );
+    }
+
     private void HandleMessage(string data)
     {
         try
@@ -76,33 +111,29 @@ public class WaiterWebSocketManager : MonoBehaviour
             {
                 case "roomData":
                     var roomDataMessage = JsonConvert.DeserializeObject<WebSocketRoomDataMessage>(data);
-                    if (roomDataMessage == null)
+                    if (roomDataMessage != null)
                     {
-                        Debug.LogError("Failed to deserialize room data message");
-                        return;
+                        UpdateWaiterDisplay(roomDataMessage.room, roomDataMessage.nonAssignedWaiters);
                     }
+                    break;
 
-                    // Extraire les waiters assignés des zones
-                    List<WaiterData> assignedWaiters = new List<WaiterData>();
-                    if (roomDataMessage.room?.zones != null)
+                case "roomUpdated":
+                    var roomUpdatedMessage = JsonConvert.DeserializeObject<WebSocketRoomDataMessage>(data);
+                    if (roomUpdatedMessage != null)
                     {
-                        foreach (var zone in roomDataMessage.room.zones)
-                        {
-                            if (zone.assignedServers != null)
-                            {
-                                assignedWaiters.AddRange(zone.assignedServers);
-                            }
-                        }
+                        UpdateWaiterDisplay(roomUpdatedMessage.room, roomUpdatedMessage.nonAssignedWaiters);
                     }
+                    break;
 
-                    Debug.Log($"Found {assignedWaiters.Count} assigned waiters");
-                    Debug.Log($"Found {roomDataMessage.nonAssignedWaiters?.Count ?? 0} non-assigned waiters");
-
-                    // Mettre à jour les UI via le WaiterManager
-                    WaiterManager.Instance.UpdateWaiters(
-                        assignedWaiters,
-                        roomDataMessage.nonAssignedWaiters // On prend les non-assignés directement du message
-                    );
+                case "waiterConnected":
+                case "waiterDisconnected":
+                    // Si besoin de gérer ces événements plus tard
+                    var waiterMessage = JsonConvert.DeserializeObject<WebSocketWaiterMessage>(data);
+                    if (waiterMessage?.waiter != null)
+                    {
+                        // Mettre à jour le statut du waiter spécifique
+                        WaiterManager.Instance.UpdateWaiterStatus(waiterMessage.waiter.id, waiterMessage.waiter.status);
+                    }
                     break;
             }
         }
@@ -130,3 +161,4 @@ public class WaiterWebSocketManager : MonoBehaviour
         }
     }
 }
+
