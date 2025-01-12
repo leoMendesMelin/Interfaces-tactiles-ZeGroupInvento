@@ -19,6 +19,10 @@ public class GridUIManager : MonoBehaviour
     private RectTransform backgroundPanel;
     private const float POSITION_OFFSET = 2f;
 
+    private Dictionary<string, Coroutine> colorTransitionCoroutines = new Dictionary<string, Coroutine>();
+    private const float COLOR_TRANSITION_DURATION = 0.5f; // Durée de la transition en secondes
+
+
     private void Awake()
     {
         gridManager = FindObjectOfType<GridManager>();
@@ -33,6 +37,15 @@ public class GridUIManager : MonoBehaviour
 
     private void ClearCurrentElements()
     {
+        foreach (var coroutine in colorTransitionCoroutines.Values)
+        {
+            if (coroutine != null)
+            {
+                StopCoroutine(coroutine);
+            }
+        }
+        colorTransitionCoroutines.Clear();
+
         foreach (var instance in elementInstances.Values)
         {
             Destroy(instance);
@@ -74,36 +87,31 @@ public class GridUIManager : MonoBehaviour
     rectTransform.rotation = Quaternion.Euler(0, 0, normalizedRotation);
 
         if (element.type.StartsWith("TABLE_"))
-    {
-        // Trouver le composant Image du TTable
-        Transform tTableTransform = elementObj.transform.Find("Tbale");
-        if (tTableTransform != null)
         {
-            Image tableImage = tTableTransform.GetComponent<Image>();
-            if (tableImage != null)
+            Transform tTableTransform = elementObj.transform.Find("Tbale");
+            if (tTableTransform != null)
             {
-                // Définir la couleur en fonction de l'état
-                switch (element.state)
+                Image tableImage = tTableTransform.GetComponent<Image>();
+                if (tableImage != null)
                 {
-                    case "Available":
-                        tableImage.color = new Color(0.0f, 1.0f, 0.0f, 1.0f); // Vert
-                        break;
-                    case "WaitingForOrder":
-                        tableImage.color = new Color(1.0f, 0.65f, 0.0f, 1.0f); // Orange
-                        break;
-                    case "WaitingForPayment":
-                        tableImage.color = new Color(1.0f, 0.0f, 0.0f, 1.0f); // Rouge
-                        break;
-                    default:
-                        tableImage.color = Color.white;
-                        break;
+                    Color targetColor = GetColorForState(element.state);
+
+                    // Arrêter la coroutine précédente si elle existe
+                    if (colorTransitionCoroutines.ContainsKey(element.id))
+                    {
+                        StopCoroutine(colorTransitionCoroutines[element.id]);
+                        colorTransitionCoroutines.Remove(element.id);
+                    }
+
+                    // Démarrer la nouvelle transition
+                    Coroutine transitionCoroutine = StartCoroutine(TransitionColor(tableImage, targetColor));
+                    colorTransitionCoroutines[element.id] = transitionCoroutine;
                 }
             }
         }
-    }
 
-    // Mettre à jour ou ajouter l'élément dans le dictionnaire
-    elementInstances[element.id] = elementObj;
+        // Mettre à jour ou ajouter l'élément dans le dictionnaire
+        elementInstances[element.id] = elementObj;
 
     // Initialiser ElementDragHandler
     ElementDragHandler dragHandler = elementObj.GetComponent<ElementDragHandler>();
@@ -112,6 +120,44 @@ public class GridUIManager : MonoBehaviour
         dragHandler.Initialize(element);
     }
 }
+
+    private Color GetColorForState(string state)
+    {
+        switch (state)
+        {
+            case "Available":
+                return new Color(0.0f, 1.0f, 0.0f, 1.0f); // Vert
+            case "WaitingForOrder":
+                return new Color(1.0f, 0.65f, 0.0f, 1.0f); // Orange
+            case "WaitingForPayment":
+                return new Color(1.0f, 0.0f, 0.0f, 1.0f); // Rouge
+            default:
+                return Color.white;
+        }
+    }
+
+    private IEnumerator TransitionColor(Image image, Color targetColor)
+    {
+        Color startColor = image.color;
+        float elapsedTime = 0f;
+
+        while (elapsedTime < COLOR_TRANSITION_DURATION)
+        {
+            elapsedTime += Time.deltaTime;
+            float t = elapsedTime / COLOR_TRANSITION_DURATION;
+
+            // Utiliser une courbe d'interpolation pour une transition plus fluide
+            t = Mathf.SmoothStep(0, 1, t);
+
+            image.color = Color.Lerp(startColor, targetColor, t);
+            yield return null;
+        }
+
+        // S'assurer que la couleur finale est exactement la couleur cible
+        image.color = targetColor;
+    }
+
+
 
     // Mettre à jour la méthode DisplayElements pour utiliser CreateOrUpdateElementUI
     public void DisplayElements(RoomElement[] elements)

@@ -9,11 +9,29 @@ public class WebSocketManager : MonoBehaviour
     private WebSocket webSocket;
     private const string WS_URL = "ws://localhost:9091";
     private RoomManager roomManager;
+    private NotificationManager notificationManager;
 
     async void Start()
     {
         roomManager = RoomManager.Instance;
         await ConnectToServer();
+        notificationManager = FindObjectOfType<NotificationManager>();
+    }
+
+    public async Task SendTableUpdateResponse(string requestId, bool approved, RoomElement[] tables)
+    {
+        if (webSocket.State == WebSocketState.Open)
+        {
+            var messageData = new
+            {
+                eventType = "tableUpdateResponse",
+                requestId = requestId,
+                approved = approved,
+                tables = tables
+            };
+            string json = JsonConvert.SerializeObject(messageData);
+            await webSocket.SendText(json);
+        }
     }
 
     private async Task ConnectToServer()
@@ -57,6 +75,7 @@ public class WebSocketManager : MonoBehaviour
     {
         if (webSocket.State == WebSocketState.Open)
         {
+            element.isBeingEdited = true;
             var messageData = new
             {
                 eventType = "elementDragStart",
@@ -72,11 +91,14 @@ public class WebSocketManager : MonoBehaviour
     {
         if (webSocket.State == WebSocketState.Open)
         {
+            element.isBeingEdited = true;
+
             var messageData = new
             {
                 eventType = "elementDragging",
                 roomId = roomManager.GetCurrentRoom().id,
                 element = element
+            
             };
             string json = JsonConvert.SerializeObject(messageData);
             await webSocket.SendText(json);
@@ -87,9 +109,11 @@ public class WebSocketManager : MonoBehaviour
     {
         if (webSocket.State == WebSocketState.Open)
         {
+            element.isBeingEdited = false;
+
             var messageData = new
             {
-                eventType = "elementDragEnd",
+                eventType = "elementDragging",
                 roomId = roomManager.GetCurrentRoom().id,
                 element = element
             };
@@ -130,7 +154,25 @@ public class WebSocketManager : MonoBehaviour
                     var roomMessage = JsonConvert.DeserializeObject<WebSocketRoomMessage>(data);
                     //roomManager.OnRoomDataReceived(roomMessage.room);
                     break;
+                case "tableUpdateRequestBroadcast":
+                    var requestMessage = JsonConvert.DeserializeObject<WebSocketTableUpdateRequestMessage>(data);
+                    Debug.Log($"[Table Update Request] Received from {requestMessage.requestData.waiterName}");
+                    Debug.Log($"[Table Update Request] Request ID: {requestMessage.requestData.requestId}");
+                    Debug.Log($"[Table Update Request] Tables to update: {requestMessage.requestData.tables.Length}");
+
+                    // Créer la notification
+                    if (notificationManager != null)
+                    {
+                        notificationManager.CreateTableUpdateNotification(
+                            requestMessage.requestData.waiterName,
+                            requestMessage.requestData.requestId,
+                            requestMessage.requestData.tables
+                        );
+                    }
+
+                    break;
             }
+
         }
         catch (Exception e)
         {

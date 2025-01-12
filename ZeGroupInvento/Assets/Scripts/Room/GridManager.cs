@@ -50,8 +50,8 @@ public class GridManager : MonoBehaviour
 
         for (int i = 0; i <= gridSize; i++)
         {
-            CreateLine(true, i, startX, startY);
-            CreateLine(false, i, startX, startY);
+            //CreateLine(true, i, startX, startY);
+            //CreateLine(false, i, startX, startY);
         }
 
         currentGridSize = gridSize;

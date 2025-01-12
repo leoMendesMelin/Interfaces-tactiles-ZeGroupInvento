@@ -40,3 +40,25 @@ public class WebSocketWaiterMessage : WebSocketMessage
 {
     public WaiterData waiter;
 }
+
+[Serializable]
+public class TableUpdateRequestData
+{
+    public string requestId;
+    public string waiterName;
+    public RoomElement[] tables;
+}
+
+[Serializable]
+public class WebSocketTableUpdateRequestMessage : WebSocketMessage
+{
+    public TableUpdateRequestData requestData;
+}
+
+[Serializable]
+public class WebSocketTableUpdateResponseMessage : WebSocketMessage
+{
+    public bool approved;
+    public string requestId;
+    public RoomElement[] tables;
+}
