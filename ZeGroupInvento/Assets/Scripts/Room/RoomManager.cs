@@ -70,7 +70,8 @@ public class RoomManager : MonoBehaviour
             type = type,
             position = new Position { x = gridPosition.x, y = gridPosition.y },
             rotation = rotation,
-            isBeingEdited = false
+            isBeingEdited = false,
+            state = type.StartsWith("TABLE_") ? "Available" : null  // On initialise l'état uniquement pour les tables
         };
         Debug.LogWarning("DANS ADD ELEMENT");
 

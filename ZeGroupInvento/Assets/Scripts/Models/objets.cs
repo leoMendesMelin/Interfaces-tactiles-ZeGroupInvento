@@ -21,6 +21,7 @@ public class RoomElement
     public bool isBeingEdited;
     public Position position;
     public float rotation;
+    public string state;
 }
 
 [Serializable]

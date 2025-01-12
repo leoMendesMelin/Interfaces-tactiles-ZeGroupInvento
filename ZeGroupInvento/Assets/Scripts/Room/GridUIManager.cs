@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class GridUIManager : MonoBehaviour
 {
@@ -71,6 +72,35 @@ public class GridUIManager : MonoBehaviour
     float normalizedRotation = element.rotation % 360;
     if (normalizedRotation < 0) normalizedRotation += 360;
     rectTransform.rotation = Quaternion.Euler(0, 0, normalizedRotation);
+
+        if (element.type.StartsWith("TABLE_"))
+    {
+        // Trouver le composant Image du TTable
+        Transform tTableTransform = elementObj.transform.Find("Tbale");
+        if (tTableTransform != null)
+        {
+            Image tableImage = tTableTransform.GetComponent<Image>();
+            if (tableImage != null)
+            {
+                // Définir la couleur en fonction de l'état
+                switch (element.state)
+                {
+                    case "Available":
+                        tableImage.color = new Color(0.0f, 1.0f, 0.0f, 1.0f); // Vert
+                        break;
+                    case "WaitingForOrder":
+                        tableImage.color = new Color(1.0f, 0.65f, 0.0f, 1.0f); // Orange
+                        break;
+                    case "WaitingForPayment":
+                        tableImage.color = new Color(1.0f, 0.0f, 0.0f, 1.0f); // Rouge
+                        break;
+                    default:
+                        tableImage.color = Color.white;
+                        break;
+                }
+            }
+        }
+    }
 
     // Mettre à jour ou ajouter l'élément dans le dictionnaire
     elementInstances[element.id] = elementObj;
