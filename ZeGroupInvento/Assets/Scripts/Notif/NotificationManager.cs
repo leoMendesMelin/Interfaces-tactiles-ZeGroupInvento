@@ -3,118 +3,165 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine.UI;
 using System.Linq;
+using UnityEngine.Events;
 
 public class NotificationManager : MonoBehaviour
 {
     [SerializeField] private GameObject notifModifTablesPrefab;
 
-    void Awake()
+    private void Awake()
     {
         if (notifModifTablesPrefab == null)
         {
-            Debug.LogError("NotifModifTables prefab is not assigned in NotificationManager!");
+            Debug.LogError("[NotificationManager] ERREUR: notifModifTablesPrefab n'est pas assigné!");
+            return;
         }
+        Debug.Log("[NotificationManager] Initialized successfully");
     }
 
     public void CreateTableUpdateNotification(string waiterName, string requestId, RoomElement[] tables)
     {
-        Debug.Log($"Creating notification for waiter: {waiterName}, requestId: {requestId}");
+        Debug.Log($"[NotificationManager] Début création notification pour {waiterName}");
 
-        // Trouver tous les NotifPanel, y compris les inactifs
+        if (notifModifTablesPrefab == null)
+        {
+            Debug.LogError("[NotificationManager] Erreur: prefab non disponible!");
+            return;
+        }
+
+        // On utilise Resources.FindObjectsOfTypeAll pour trouver TOUS les GameObject, même désactivés
         var notifPanels = Resources.FindObjectsOfTypeAll<GameObject>()
-            .Where(go => go.CompareTag("NotifPanel"))
+            .Where(go => go.name == "NotifPanel")
             .ToArray();
 
-        Debug.Log($"Found {notifPanels.Length} NotifPanels (including inactive)");
+        Debug.Log($"[NotificationManager] Nombre de NotifPanels trouvés (incluant inactifs): {notifPanels.Length}");
 
         if (notifPanels.Length == 0)
         {
-            Debug.LogWarning("No NotifPanels found! Searching by name...");
-
-            // Recherche alternative par nom, incluant les objets inactifs
-            var allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
-            notifPanels = allObjects.Where(go => go.name == "NotifPanel").ToArray();
-
-            if (notifPanels.Length > 0)
-            {
-                Debug.Log($"Found {notifPanels.Length} NotifPanels by name");
-            }
+            Debug.LogError("[NotificationManager] Aucun NotifPanel trouvé, même inactif!");
+            return;
         }
 
         foreach (var panel in notifPanels)
         {
-            Debug.Log($"Creating notification in panel: {panel.name} (Active: {panel.activeInHierarchy})");
-
-            // Activer le panel s'il est inactif
-            if (!panel.activeInHierarchy)
-            {
-                panel.SetActive(true);
-                Debug.Log($"Activated panel: {panel.name}");
-            }
-
-            // Instancier le prefab
             GameObject notification = Instantiate(notifModifTablesPrefab, panel.transform);
-            if (notification == null)
+            if (notification != null)
             {
-                Debug.LogError("Failed to instantiate notification prefab!");
-                continue;
-            }
-
-            // Configurer le nom du waiter
-            var nameWaiterText = notification.transform.Find("Container/NameWaiter/Text (TMP)");
-            if (nameWaiterText != null)
-            {
-                var tmp = nameWaiterText.GetComponent<TextMeshProUGUI>();
-                if (tmp != null)
+                // Configuration du texte serveur 
+                var waiterText = notification.transform.Find("Container/NameWaiter/Text (TMP)")?.GetComponent<TMPro.TextMeshProUGUI>();
+                if (waiterText != null)
                 {
-                    tmp.text = waiterName;
+                    waiterText.text = $"Serveur: {waiterName}";
+                    waiterText.color = Color.white;
                 }
+
+                // Configuration titre
+                var titleText = notification.transform.Find("Container/TitleNotif/Text (TMP)")?.GetComponent<TMPro.TextMeshProUGUI>();
+                if (titleText != null)
+                {
+                    titleText.text = $"Demande de modification de {tables.Length} table(s)";
+                    titleText.color = new Color(0.9f, 0.9f, 0.9f); // Gris clair
+                }
+
+                // Configuration boutons avec couleurs
+                var acceptBtn = notification.transform.Find("Container/ACCEPT")?.GetComponent<Button>();
+                if (acceptBtn != null)
+                {
+                    // Vert validation
+                    var btnColors = acceptBtn.colors;
+                    btnColors.normalColor = new Color(0.2f, 0.8f, 0.2f);
+                    btnColors.highlightedColor = new Color(0.3f, 0.9f, 0.3f);
+                    acceptBtn.colors = btnColors;
+                }
+
+                var rejectBtn = notification.transform.Find("Container/REJECT")?.GetComponent<Button>();
+                if (rejectBtn != null)
+                {
+                    // Rouge refus  
+                    var btnColors = rejectBtn.colors;
+                    btnColors.normalColor = new Color(0.8f, 0.2f, 0.2f);
+                    btnColors.highlightedColor = new Color(0.9f, 0.3f, 0.3f);
+                    rejectBtn.colors = btnColors;
+                }
+
+                // Ajouter les listeners
+                SetupButton(notification, "Container/ACCEPT", () => OnAcceptClick(requestId, tables));
+                SetupButton(notification, "Container/REJECT", () => OnRejectClick(requestId, tables));
             }
-
-            // Configurer les boutons
-            SetupButton(notification, "Container/ACCEPT", () => HandleAccept(requestId, tables));
-            SetupButton(notification, "Container/REJECT", () => HandleReject(requestId, tables));
-
-            // S'assurer que la notification est active
-            notification.SetActive(true);
         }
     }
 
-    private void SetupButton(GameObject notification, string path, System.Action onClick)
+    private string GetGameObjectPath(Transform transform)
     {
-        var buttonObj = notification.transform.Find(path);
-        if (buttonObj != null)
+        string path = transform.name;
+        Transform parent = transform.parent;
+        while (parent != null)
         {
-            var button = buttonObj.GetComponent<Button>();
+            path = parent.name + "/" + path;
+            parent = parent.parent;
+        }
+        return path;
+    }
+
+    private void SetupButton(GameObject notification, string buttonPath, UnityAction action)
+    {
+        var buttonTransform = notification.transform.Find(buttonPath);
+        if (buttonTransform != null)
+        {
+            var button = buttonTransform.GetComponent<Button>();
             if (button != null)
             {
-                button.onClick.AddListener(() => onClick());
+                button.onClick.AddListener(action);
+                Debug.Log($"[NotificationManager] Bouton configuré: {buttonPath}");
             }
-        }
-    }
-
-    private void HandleAccept(string requestId, RoomElement[] tables)
-    {
-        Debug.Log($"Accepting request: {requestId}");
-        SendUpdateResponse(requestId, true, tables);
-    }
-
-    private void HandleReject(string requestId, RoomElement[] tables)
-    {
-        Debug.Log($"Rejecting request: {requestId}");
-        SendUpdateResponse(requestId, false, tables);
-    }
-
-    private void SendUpdateResponse(string requestId, bool approved, RoomElement[] tables)
-    {
-        var webSocketManager = FindObjectOfType<WebSocketManager>();
-        if (webSocketManager != null)
-        {
-            webSocketManager.SendTableUpdateResponse(requestId, approved, tables);
+            else
+            {
+                Debug.LogError($"[NotificationManager] Bouton component manquant sur {buttonPath}");
+            }
         }
         else
         {
-            Debug.LogError("WebSocketManager not found!");
+            Debug.LogError($"[NotificationManager] Chemin du bouton non trouvé: {buttonPath}");
+        }
+    }
+
+    private void ConfigureButton(GameObject notification, string path, UnityAction action)
+    {
+        var button = notification.transform.Find(path)?.GetComponent<Button>();
+        if (button != null)
+        {
+            button.onClick.AddListener(action);
+            Debug.Log($"[NotificationManager] Bouton configuré: {path}");
+        }
+        else
+        {
+            Debug.LogError($"[NotificationManager] ERREUR: Bouton non trouvé: {path}");
+        }
+    }
+
+    private void OnAcceptClick(string requestId, RoomElement[] tables)
+    {
+        Debug.Log($"[NotificationManager] Accept clicked for request: {requestId}");
+        SendUpdateResponse(true, requestId, tables);
+    }
+
+    private void OnRejectClick(string requestId, RoomElement[] tables)
+    {
+        Debug.Log($"[NotificationManager] Reject clicked for request: {requestId}");
+        SendUpdateResponse(false, requestId, tables);
+    }
+
+    private void SendUpdateResponse(bool approved, string requestId, RoomElement[] tables)
+    {
+        var socketManager = FindObjectOfType<WebSocketManager>();
+        if (socketManager != null)
+        {
+            socketManager.SendTableUpdateResponse(requestId, approved, tables);
+            Debug.Log($"[NotificationManager] Réponse envoyée: {(approved ? "Accept" : "Reject")}");
+        }
+        else
+        {
+            Debug.LogError("[NotificationManager] ERREUR: WebSocketManager non trouvé!");
         }
     }
 }

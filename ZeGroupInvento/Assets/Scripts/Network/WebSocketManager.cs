@@ -160,16 +160,23 @@ public class WebSocketManager : MonoBehaviour
                     Debug.Log($"[Table Update Request] Request ID: {requestMessage.requestData.requestId}");
                     Debug.Log($"[Table Update Request] Tables to update: {requestMessage.requestData.tables.Length}");
 
-                    // Créer la notification
-                    if (notificationManager != null)
+                    // Vérifier si le NotificationManager existe
+                    if (notificationManager == null)
                     {
-                        notificationManager.CreateTableUpdateNotification(
-                            requestMessage.requestData.waiterName,
-                            requestMessage.requestData.requestId,
-                            requestMessage.requestData.tables
-                        );
+                        notificationManager = FindObjectOfType<NotificationManager>();
+                        if (notificationManager == null)
+                        {
+                            Debug.LogError("ERREUR CRITIQUE: NotificationManager introuvable!");
+                            return;
+                        }
                     }
 
+                    Debug.Log("Tentative de création de notification...");
+                    notificationManager.CreateTableUpdateNotification(
+                        requestMessage.requestData.waiterName,
+                        requestMessage.requestData.requestId,
+                        requestMessage.requestData.tables
+                    );
                     break;
             }
 
