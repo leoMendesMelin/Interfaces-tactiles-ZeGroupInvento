@@ -14,6 +14,7 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
     private RoomManager roomManager;
     private Vector2 originalPosition;
     private WebSocketManager webSocketManager;
+    public bool IsDragging { get; private set; }
 
     private void Awake()
     {
@@ -63,7 +64,7 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
             Debug.LogError("webSocketManager is null in OnBeginDrag");
             return;
         }
-
+        IsDragging = true;
         Debug.Log($"Beginning drag for element ID: {elementData.id}");
         originalPosition = rectTransform.anchoredPosition;
         elementData.isBeingEdited = true;
@@ -113,7 +114,7 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
         }
 
         Vector2Int newGridPosition = gridManager.GetGridPosition(rectTransform.anchoredPosition);
-
+        IsDragging = false;
         // On vérifie si c'est une table rectangulaire
         if (elementData.type.StartsWith("TABLE_RECT_"))
         {
@@ -156,6 +157,11 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
         };
         elementData.isBeingEdited = false;
         webSocketManager.EmitElementDragEnd(elementData);
+    }
+
+    public bool IsUsingTouch(int touchId)
+    {
+        return IsDragging && Input.touchCount > 0 && Input.GetTouch(0).fingerId == touchId;
     }
 
     private RoomElement FindNearbyTable(Vector2Int position)

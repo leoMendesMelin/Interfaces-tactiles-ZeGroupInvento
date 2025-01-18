@@ -55,17 +55,3 @@ public class WaiterData
     public string name;
     public string status;
 }
-
-
-
-public class MergedTableData : MonoBehaviour
-{
-    public string table1Id;
-    public string table2Id;
-
-    public void Initialize(string id1, string id2)
-    {
-        table1Id = id1;
-        table2Id = id2;
-    }
-}

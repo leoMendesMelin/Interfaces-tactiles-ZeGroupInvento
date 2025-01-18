@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -54,21 +53,15 @@ public class GridUIManager : MonoBehaviour
         elementInstances.Clear();
     }
 
+    private IEnumerator InitializeSliceHandler(TableSliceHandler sliceHandler, RoomElement element)
+    {
+        yield return new WaitForEndOfFrame();
+        sliceHandler.Initialize(element);
+    }
+
     public void CreateOrUpdateElementUI(RoomElement element)
 {
-    if (element.type == "TABLE_RECT_2")
-    {
-        // Chercher une table adjacente
-        RoomElement adjacentTable = FindAdjacentTable(element);
-
-        if (adjacentTable != null)
-        {
-            // Créer une table fusionnée visuellement
-            CreateMergedTableUI(element, adjacentTable);
-            return;
-        }
-    }
-     var prefabMapping = prefabMappings.Find(pm => pm.elementType == element.type);
+    var prefabMapping = prefabMappings.Find(pm => pm.elementType == element.type);
     if (prefabMapping == null)
     {
         Debug.LogError($"No prefab found for element type: {element.type}");
@@ -99,9 +92,20 @@ public class GridUIManager : MonoBehaviour
     float normalizedRotation = element.rotation % 360;
     if (normalizedRotation < 0) normalizedRotation += 360;
     rectTransform.rotation = Quaternion.Euler(0, 0, normalizedRotation);
+        ElementDragHandler dragHandler = elementObj.GetComponent<ElementDragHandler>();
+        if (dragHandler == null)
+        {
+            dragHandler = elementObj.AddComponent<ElementDragHandler>();
+        }
+        dragHandler.Initialize(element);
 
         if (element.type.StartsWith("TABLE_"))
         {
+            if (element.type == "TABLE_RECT_4")
+            {
+                TableSliceHandler sliceHandler = elementObj.AddComponent<TableSliceHandler>();
+                StartCoroutine(InitializeSliceHandler(sliceHandler, element));
+            }
             Transform tTableTransform = elementObj.transform.Find("Tbale");
             if (tTableTransform != null)
             {
@@ -126,83 +130,7 @@ public class GridUIManager : MonoBehaviour
 
         // Mettre à jour ou ajouter l'élément dans le dictionnaire
         elementInstances[element.id] = elementObj;
-
-    // Initialiser ElementDragHandler
-    ElementDragHandler dragHandler = elementObj.GetComponent<ElementDragHandler>();
-    if (dragHandler != null)
-    {
-        dragHandler.Initialize(element);
-    }
 }
-
-    private RoomElement FindElementById(string id)
-    {
-        // On récupère la salle actuelle via le RoomManager
-        Room currentRoom = RoomManager.Instance.GetCurrentRoom();
-        if (currentRoom == null || currentRoom.elements == null)
-            return null;
-
-        // On cherche l'élément avec l'id correspondant
-        return Array.Find(currentRoom.elements, element => element.id == id);
-    }
-
-
-    private RoomElement FindAdjacentTable(RoomElement sourceTable)
-    {
-        Vector2Int sourcePos = new Vector2Int(
-            Mathf.RoundToInt(sourceTable.position.x),
-            Mathf.RoundToInt(sourceTable.position.y)
-        );
-
-        // Parcourir les instances existantes
-        foreach (var kvp in elementInstances)
-        {
-            RoomElement otherElement = FindElementById(kvp.Key);
-            if (otherElement == null || otherElement.id == sourceTable.id || otherElement.type != "TABLE_RECT_2")
-                continue;
-
-            Vector2Int otherPos = new Vector2Int(
-                Mathf.RoundToInt(otherElement.position.x),
-                Mathf.RoundToInt(otherElement.position.y)
-            );
-
-            // Vérifier si la table est adjacente sur l'axe X (max 2 cases)
-            if (otherPos.y == sourcePos.y && Mathf.Abs(otherPos.x - sourcePos.x) <= 2)
-            {
-                return otherElement;
-            }
-        }
-        return null;
-    }
-
-    private void CreateMergedTableUI(RoomElement table1, RoomElement table2)
-    {
-        // Trouver le prefab de la table 4 places
-        var prefabMapping = prefabMappings.Find(pm => pm.elementType == "TABLE_RECT_4");
-        if (prefabMapping == null) return;
-
-        // Calculer la position centrale entre les deux tables
-        Vector2 centerPosition = new Vector2(
-            (table1.position.x + table2.position.x) / 2f,
-            table1.position.y
-        );
-
-        // Créer la table fusionnée
-        GameObject mergedTable = Instantiate(prefabMapping.prefab, backgroundPanel);
-        RectTransform rectTransform = mergedTable.GetComponent<RectTransform>();
-
-        // Positionner la table fusionnée
-        rectTransform.anchoredPosition = gridManager.GetWorldPosition(
-            new Vector2Int(Mathf.RoundToInt(centerPosition.x), Mathf.RoundToInt(centerPosition.y))
-        );
-
-        // Stocker les références aux tables originales 
-        mergedTable.AddComponent<MergedTableData>().Initialize(table1.id, table2.id);
-
-        // Mettre à jour les instances
-        string mergedId = $"merged_{table1.id}_{table2.id}";
-        elementInstances[mergedId] = mergedTable;
-    }
 
     private Color GetColorForState(string state)
     {
