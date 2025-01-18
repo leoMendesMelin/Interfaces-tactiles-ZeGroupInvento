@@ -4,10 +4,14 @@ using TMPro;
 using UnityEngine.UI;
 using System.Linq;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
+using System.Collections;
 
 public class NotificationManager : MonoBehaviour
 {
     [SerializeField] private GameObject notifModifTablesPrefab;
+    private Dictionary<string, List<GameObject>> previewInstances = new Dictionary<string, List<GameObject>>();
+    private Dictionary<string, List<GameObject>> originalTables = new Dictionary<string, List<GameObject>>();
 
     private void Awake()
     {
@@ -23,84 +27,198 @@ public class NotificationManager : MonoBehaviour
     {
         Debug.Log($"[NotificationManager] Début création notification pour {waiterName}");
 
-        if (notifModifTablesPrefab == null)
-        {
-            Debug.LogError("[NotificationManager] Erreur: prefab non disponible!");
-            return;
-        }
-
-        // On utilise Resources.FindObjectsOfTypeAll pour trouver TOUS les GameObject, même désactivés
         var notifPanels = Resources.FindObjectsOfTypeAll<GameObject>()
             .Where(go => go.name == "NotifPanel")
             .ToArray();
 
-        Debug.Log($"[NotificationManager] Nombre de NotifPanels trouvés (incluant inactifs): {notifPanels.Length}");
+        Debug.Log($"[NotificationManager] Nombre de NotifPanels trouvés: {notifPanels.Length}");
 
         if (notifPanels.Length == 0)
         {
-            Debug.LogError("[NotificationManager] Aucun NotifPanel trouvé, même inactif!");
+            Debug.LogError("[NotificationManager] Aucun NotifPanel trouvé!");
             return;
         }
 
         foreach (var panel in notifPanels)
         {
             GameObject notification = Instantiate(notifModifTablesPrefab, panel.transform);
-            if (notification != null)
+            if (notification == null) continue;
+
+            SetupNotificationText(notification, waiterName, tables.Length);
+            SetupButtonColors(notification);
+            SetupPreviewButton(notification, requestId, tables);
+            SetupActionButtons(notification, requestId, tables);
+        }
+    }
+
+    private void SetupNotificationText(GameObject notification, string waiterName, int tableCount)
+    {
+        // Cherchons directement le TextMeshProUGUI sur le NameWaiter
+        var nameWaiterText = notification.transform.Find("Container/NameWaiter")?.GetComponent<TextMeshProUGUI>();
+        if (nameWaiterText != null)
+        {
+            nameWaiterText.text = $"Serveur: {waiterName}";
+            nameWaiterText.color = Color.white;
+        }
+        else
+        {
+            Debug.LogError($"[NotificationManager] TextMeshProUGUI non trouvé sur NameWaiter. Structure actuelle: {GetGameObjectHierarchy(notification)}");
+        }
+
+        SetText(notification, "Container/TitleNotif/Text (TMP)", $"Demande de modification de {tableCount} table(s)");
+    }
+
+    private string GetGameObjectHierarchy(GameObject obj)
+    {
+        string hierarchy = obj.name;
+        Transform current = obj.transform;
+        while (current.parent != null)
+        {
+            current = current.parent;
+            hierarchy = current.name + "/" + hierarchy;
+        }
+        return hierarchy;
+    }
+
+    private void SetupButtonColors(GameObject notification)
+    {
+        SetButtonColor(notification, "Container/ACCEPT", new Color(0.2f, 0.8f, 0.2f), new Color(0.3f, 0.9f, 0.3f));
+        SetButtonColor(notification, "Container/REJECT", new Color(0.8f, 0.2f, 0.2f), new Color(0.9f, 0.3f, 0.3f));
+    }
+
+    private void SetText(GameObject notification, string path, string text)
+    {
+        var textComponent = notification.transform.Find(path)?.GetComponent<TextMeshProUGUI>();
+        if (textComponent != null)
+        {
+            textComponent.text = text;
+            textComponent.color = Color.white;
+        }
+    }
+
+    private void SetButtonColor(GameObject notification, string path, Color normalColor, Color highlightedColor)
+    {
+        var button = notification.transform.Find(path)?.GetComponent<Button>();
+        if (button != null)
+        {
+            var colors = button.colors;
+            colors.normalColor = normalColor;
+            colors.highlightedColor = highlightedColor;
+            button.colors = colors;
+        }
+    }
+
+    private void SetupPreviewButton(GameObject notification, string requestId, RoomElement[] tables)
+    {
+        var previewBtn = notification.transform.Find("Container/Preview")?.GetComponent<Button>();
+        if (previewBtn == null) return;
+
+        var eventTrigger = previewBtn.gameObject.AddComponent<EventTrigger>();
+
+        var pointerDown = new EventTrigger.Entry { eventID = EventTriggerType.PointerDown };
+        pointerDown.callback.AddListener((data) => ShowPreview(requestId, tables));
+        eventTrigger.triggers.Add(pointerDown);
+
+        var pointerUp = new EventTrigger.Entry { eventID = EventTriggerType.PointerUp };
+        pointerUp.callback.AddListener((data) => HidePreview(requestId));
+        eventTrigger.triggers.Add(pointerUp);
+    }
+
+    private void ShowPreview(string requestId, RoomElement[] tables)
+    {
+        originalTables[requestId] = new List<GameObject>();
+        previewInstances[requestId] = new List<GameObject>();
+
+        foreach (var table in tables)
+        {
+            var originalTable = GameObject.Find(table.id);
+            if (originalTable != null)
             {
-                // Configuration du texte serveur 
-                var waiterText = notification.transform.Find("Container/NameWaiter/Text (TMP)")?.GetComponent<TMPro.TextMeshProUGUI>();
-                if (waiterText != null)
-                {
-                    waiterText.text = $"Serveur: {waiterName}";
-                    waiterText.color = Color.white;
-                }
+                originalTable.SetActive(false);
+                originalTables[requestId].Add(originalTable);
+            }
 
-                // Configuration titre
-                var titleText = notification.transform.Find("Container/TitleNotif/Text (TMP)")?.GetComponent<TMPro.TextMeshProUGUI>();
-                if (titleText != null)
+            var gridUIManager = FindObjectOfType<GridUIManager>();
+            if (gridUIManager != null)
+            {
+                var previewTable = CreatePreviewTable(table, gridUIManager);
+                if (previewTable != null)
                 {
-                    titleText.text = $"Demande de modification de {tables.Length} table(s)";
-                    titleText.color = new Color(0.9f, 0.9f, 0.9f); // Gris clair
+                    previewInstances[requestId].Add(previewTable);
                 }
-
-                // Configuration boutons avec couleurs
-                var acceptBtn = notification.transform.Find("Container/ACCEPT")?.GetComponent<Button>();
-                if (acceptBtn != null)
-                {
-                    // Vert validation
-                    var btnColors = acceptBtn.colors;
-                    btnColors.normalColor = new Color(0.2f, 0.8f, 0.2f);
-                    btnColors.highlightedColor = new Color(0.3f, 0.9f, 0.3f);
-                    acceptBtn.colors = btnColors;
-                }
-
-                var rejectBtn = notification.transform.Find("Container/REJECT")?.GetComponent<Button>();
-                if (rejectBtn != null)
-                {
-                    // Rouge refus  
-                    var btnColors = rejectBtn.colors;
-                    btnColors.normalColor = new Color(0.8f, 0.2f, 0.2f);
-                    btnColors.highlightedColor = new Color(0.9f, 0.3f, 0.3f);
-                    rejectBtn.colors = btnColors;
-                }
-
-                // Ajouter les listeners
-                SetupButton(notification, "Container/ACCEPT", () => OnAcceptClick(requestId, tables));
-                SetupButton(notification, "Container/REJECT", () => OnRejectClick(requestId, tables));
             }
         }
     }
 
-    private string GetGameObjectPath(Transform transform)
+    private GameObject CreatePreviewTable(RoomElement table, GridUIManager gridUIManager)
     {
-        string path = transform.name;
-        Transform parent = transform.parent;
-        while (parent != null)
+        var mapping = gridUIManager.prefabMappings.Find(pm => pm.elementType == table.type);
+        if (mapping == null) return null;
+
+        var backgroundPanel = GameObject.Find("BackgroundPanel").GetComponent<RectTransform>();
+        var previewTable = Instantiate(mapping.prefab, backgroundPanel);
+
+        var rectTransform = previewTable.GetComponent<RectTransform>();
+        var gridManager = FindObjectOfType<GridManager>();
+
+        Vector2Int gridPosition = new Vector2Int(
+            Mathf.RoundToInt(table.position.x),
+            Mathf.RoundToInt(table.position.y)
+        );
+
+        rectTransform.anchoredPosition = gridManager.GetWorldPosition(gridPosition);
+        rectTransform.rotation = Quaternion.Euler(0, 0, table.rotation);
+
+        var tableImage = previewTable.transform.Find("Tbale")?.GetComponent<Image>();
+        if (tableImage != null)
         {
-            path = parent.name + "/" + path;
-            parent = parent.parent;
+            tableImage.color = new Color(0.7f, 0.7f, 0.7f, 0.6f);
+            StartCoroutine(AnimatePreviewTable(rectTransform));
         }
-        return path;
+
+        return previewTable;
+    }
+
+    private IEnumerator AnimatePreviewTable(RectTransform rectTransform)
+    {
+        Vector3 originalScale = rectTransform.localScale;
+        float animationSpeed = 2f;
+        float scaleAmount = 0.2f;
+
+        while (true)
+        {
+            // Animation de pulsation
+            float scale = 1f + scaleAmount * Mathf.Sin(Time.time * animationSpeed);
+            rectTransform.localScale = originalScale * scale;
+            yield return null;
+        }
+    }
+
+    private void HidePreview(string requestId)
+    {
+        if (originalTables.ContainsKey(requestId))
+        {
+            foreach (var table in originalTables[requestId])
+            {
+                if (table != null)
+                {
+                    table.SetActive(true);
+                }
+            }
+            originalTables.Remove(requestId);
+        }
+
+        if (previewInstances.ContainsKey(requestId))
+        {
+            foreach (var preview in previewInstances[requestId])
+            {
+                if (preview != null)
+                {
+                    Destroy(preview);
+                }
+            }
+            previewInstances.Remove(requestId);
+        }
     }
 
     private void SetupButton(GameObject notification, string buttonPath, UnityAction action)
@@ -114,44 +232,25 @@ public class NotificationManager : MonoBehaviour
                 button.onClick.AddListener(action);
                 Debug.Log($"[NotificationManager] Bouton configuré: {buttonPath}");
             }
-            else
-            {
-                Debug.LogError($"[NotificationManager] Bouton component manquant sur {buttonPath}");
-            }
-        }
-        else
-        {
-            Debug.LogError($"[NotificationManager] Chemin du bouton non trouvé: {buttonPath}");
         }
     }
 
-    private void ConfigureButton(GameObject notification, string path, UnityAction action)
+    private void SetupActionButtons(GameObject notification, string requestId, RoomElement[] tables)
     {
-        var button = notification.transform.Find(path)?.GetComponent<Button>();
-        if (button != null)
-        {
-            button.onClick.AddListener(action);
-            Debug.Log($"[NotificationManager] Bouton configuré: {path}");
-        }
-        else
-        {
-            Debug.LogError($"[NotificationManager] ERREUR: Bouton non trouvé: {path}");
-        }
+        SetupButton(notification, "Container/ACCEPT", () => OnAcceptClick(requestId, tables));
+        SetupButton(notification, "Container/REJECT", () => OnRejectClick(requestId, tables));
     }
 
     private void OnAcceptClick(string requestId, RoomElement[] tables)
     {
-        Debug.Log($"[NotificationManager] Accept clicked for request: {requestId}");
-
         var room = RoomManager.Instance.GetCurrentRoom();
         var socketManager = FindObjectOfType<WebSocketManager>();
 
+        HidePreview(requestId);
+
         foreach (var updatedTable in tables)
         {
-            // Mettre à jour l'UI
             RoomManager.Instance.updateUIElement(updatedTable);
-
-            // Mettre à jour la table dans la room
             var existingTable = room.elements.FirstOrDefault(e => e.id == updatedTable.id);
             if (existingTable != null)
             {
@@ -161,38 +260,26 @@ public class NotificationManager : MonoBehaviour
             }
         }
 
-        // Envoyer la fin du drag pour propager les changements
         if (socketManager != null)
         {
-            socketManager.EmitElementDragEnd(tables[0]); // On envoie une table pour déclencher la mise à jour complète
+            socketManager.EmitElementDragEnd(tables[0]);
             socketManager.SendTableUpdateResponse(requestId, true, tables);
         }
     }
 
     private void OnRejectClick(string requestId, RoomElement[] tables)
     {
-        Debug.Log($"[NotificationManager] Reject clicked for request: {requestId}");
+        HidePreview(requestId);
 
-        // On laisse les tables dans leur état actuel
         foreach (var table in tables)
         {
-            // Reset des états d'édition si nécessaire
             table.isBeingEdited = false;
         }
-        SendUpdateResponse(false, requestId, tables);
-    }
 
-    private void SendUpdateResponse(bool approved, string requestId, RoomElement[] tables)
-    {
         var socketManager = FindObjectOfType<WebSocketManager>();
         if (socketManager != null)
         {
-            socketManager.SendTableUpdateResponse(requestId, approved, tables);
-            Debug.Log($"[NotificationManager] Réponse envoyée: {(approved ? "Accept" : "Reject")}");
-        }
-        else
-        {
-            Debug.LogError("[NotificationManager] ERREUR: WebSocketManager non trouvé!");
+            socketManager.SendTableUpdateResponse(requestId, false, tables);
         }
     }
 }

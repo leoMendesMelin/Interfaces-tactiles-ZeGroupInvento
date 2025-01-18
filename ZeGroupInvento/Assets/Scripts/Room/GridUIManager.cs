@@ -140,6 +140,8 @@ public class GridUIManager : MonoBehaviour
                 return new Color(0.0f, 1.0f, 0.0f, 1.0f); // Vert
             case "WaitingForOrder":
                 return new Color(1.0f, 0.65f, 0.0f, 1.0f); // Orange
+            case "Ordering":
+                return Color.yellow; // Orange
             case "WaitingForPayment":
                 return new Color(1.0f, 0.0f, 0.0f, 1.0f); // Rouge
             default:
