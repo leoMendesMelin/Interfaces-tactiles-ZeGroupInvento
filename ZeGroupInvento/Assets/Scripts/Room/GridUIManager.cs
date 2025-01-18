@@ -14,7 +14,7 @@ public class GridUIManager : MonoBehaviour
     }
 
     public List<PrefabMapping> prefabMappings;
-    private Dictionary<string, GameObject> elementInstances = new Dictionary<string, GameObject>();
+    public Dictionary<string, GameObject> elementInstances = new Dictionary<string, GameObject>();
     private GridManager gridManager;
     private RectTransform backgroundPanel;
     private const float POSITION_OFFSET = 2f;
@@ -32,6 +32,15 @@ public class GridUIManager : MonoBehaviour
     {
         backgroundPanel = panel;
         gridManager = FindObjectOfType<GridManager>();
+    }
+
+    public GameObject GetExistingTableById(string id)
+    {
+        if (elementInstances.TryGetValue(id, out GameObject table))
+        {
+            return table;
+        }
+        return null;
     }
 
 

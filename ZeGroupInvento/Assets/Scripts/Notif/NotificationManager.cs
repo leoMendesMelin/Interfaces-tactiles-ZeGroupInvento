@@ -11,7 +11,10 @@ public class NotificationManager : MonoBehaviour
 {
     [SerializeField] private GameObject notifModifTablesPrefab;
     private Dictionary<string, List<GameObject>> previewInstances = new Dictionary<string, List<GameObject>>();
-    private Dictionary<string, List<GameObject>> originalTables = new Dictionary<string, List<GameObject>>();
+    private Dictionary<string, List<GameObject>> tablesBeingMoved = new Dictionary<string, List<GameObject>>();
+
+
+    private GridUIManager gridUIManager;
 
     private void Awake()
     {
@@ -20,7 +23,7 @@ public class NotificationManager : MonoBehaviour
             Debug.LogError("[NotificationManager] ERREUR: notifModifTablesPrefab n'est pas assigné!");
             return;
         }
-        Debug.Log("[NotificationManager] Initialized successfully");
+        gridUIManager = FindObjectOfType<GridUIManager>();
     }
 
     public void CreateTableUpdateNotification(string waiterName, string requestId, RoomElement[] tables)
@@ -124,33 +127,47 @@ public class NotificationManager : MonoBehaviour
         eventTrigger.triggers.Add(pointerUp);
     }
 
-    private void ShowPreview(string requestId, RoomElement[] tables)
+    private void ShowPreview(string requestId, RoomElement[] futureTables)
     {
-        originalTables[requestId] = new List<GameObject>();
         previewInstances[requestId] = new List<GameObject>();
+        var gridUIManager = FindObjectOfType<GridUIManager>();
 
-        foreach (var table in tables)
+        foreach (var futureTable in futureTables)
         {
-            var originalTable = GameObject.Find(table.id);
-            if (originalTable != null)
+            // Trouver la table existante correspondante via son ID
+            GameObject existingTable = gridUIManager.elementInstances[futureTable.id];
+            if (existingTable != null)
             {
-                originalTable.SetActive(false);
-                originalTables[requestId].Add(originalTable);
-            }
+                // Animer la table existante
+                var existingRectTransform = existingTable.GetComponent<RectTransform>();
+                StartCoroutine(AnimatePreviewScale(existingRectTransform));
 
-            var gridUIManager = FindObjectOfType<GridUIManager>();
-            if (gridUIManager != null)
-            {
-                var previewTable = CreatePreviewTable(table, gridUIManager);
+                // Créer la prévisualisation de la future position
+                var previewTable = CreatePreviewTable(futureTable);
                 if (previewTable != null)
                 {
+                    StartCoroutine(AnimatePreviewScale(previewTable.GetComponent<RectTransform>()));
                     previewInstances[requestId].Add(previewTable);
                 }
             }
         }
     }
 
-    private GameObject CreatePreviewTable(RoomElement table, GridUIManager gridUIManager)
+    private void HidePreview(string requestId)
+    {
+        if (previewInstances.ContainsKey(requestId))
+        {
+            foreach (var preview in previewInstances[requestId])
+            {
+                if (preview != null) Destroy(preview);
+            }
+            previewInstances.Remove(requestId);
+        }
+        StopAllCoroutines(); // Arrête toutes les animations
+    }
+
+
+    private GameObject CreatePreviewTable(RoomElement table)
     {
         var mapping = gridUIManager.prefabMappings.Find(pm => pm.elementType == table.type);
         if (mapping == null) return null;
@@ -169,17 +186,17 @@ public class NotificationManager : MonoBehaviour
         rectTransform.anchoredPosition = gridManager.GetWorldPosition(gridPosition);
         rectTransform.rotation = Quaternion.Euler(0, 0, table.rotation);
 
+        // Définir la couleur de prévisualisation et ajouter l'animation
         var tableImage = previewTable.transform.Find("Tbale")?.GetComponent<Image>();
         if (tableImage != null)
         {
             tableImage.color = new Color(0.7f, 0.7f, 0.7f, 0.6f);
-            StartCoroutine(AnimatePreviewTable(rectTransform));
         }
 
         return previewTable;
     }
 
-    private IEnumerator AnimatePreviewTable(RectTransform rectTransform)
+    private IEnumerator AnimatePreviewScale(RectTransform rectTransform)
     {
         Vector3 originalScale = rectTransform.localScale;
         float animationSpeed = 2f;
@@ -187,39 +204,13 @@ public class NotificationManager : MonoBehaviour
 
         while (true)
         {
-            // Animation de pulsation
             float scale = 1f + scaleAmount * Mathf.Sin(Time.time * animationSpeed);
             rectTransform.localScale = originalScale * scale;
             yield return null;
         }
     }
 
-    private void HidePreview(string requestId)
-    {
-        if (originalTables.ContainsKey(requestId))
-        {
-            foreach (var table in originalTables[requestId])
-            {
-                if (table != null)
-                {
-                    table.SetActive(true);
-                }
-            }
-            originalTables.Remove(requestId);
-        }
-
-        if (previewInstances.ContainsKey(requestId))
-        {
-            foreach (var preview in previewInstances[requestId])
-            {
-                if (preview != null)
-                {
-                    Destroy(preview);
-                }
-            }
-            previewInstances.Remove(requestId);
-        }
-    }
+  
 
     private void SetupButton(GameObject notification, string buttonPath, UnityAction action)
     {
