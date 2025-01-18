@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using System.Linq;
+using System.Collections;
 
 public class SwitchModeManager : MonoBehaviour
 {
@@ -25,32 +26,41 @@ public class SwitchModeManager : MonoBehaviour
 
     private void Start()
     {
+        StartCoroutine(InitializeAfterDelay());
+    }
+
+    private IEnumerator InitializeAfterDelay()
+    {
+        // Attendre que les données soient chargées
+        yield return new WaitForSeconds(2f);
+
+        // Configuration des boutons
         elementButtonSouth.onClick.AddListener(() => OnElementButtonClick(true));
         elementButtonNorth.onClick.AddListener(() => OnElementButtonClick(false));
         zoneButtonSouth.onClick.AddListener(() => OnZoneButtonClick(true));
         zoneButtonNorth.onClick.AddListener(() => OnZoneButtonClick(false));
 
-        DisableZoneScripts();
+        // État initial
+        isElementSouthSelected = true;
+        isElementNorthSelected = true;
+        isZoneSouthSelected = false;
+        isZoneNorthSelected = false;
+
         UpdateMenuVisibility();
         UpdateButtonVisuals();
     }
 
-    private void DisableZoneScripts()
-    {
-        var zoneControllers = FindObjectsOfType<ZoneControllerPrefab>();
-        foreach (var controller in zoneControllers)
-        {
-            controller.enabled = false;
-        }
-    }
-
     private void UpdateScripts(bool showElementPanels, bool showZonePanels)
     {
+        Debug.Log($"UpdateScripts called with elements:{showElementPanels}, zones:{showZonePanels}");
+
         var tables = FindObjectsOfType<GameObject>()
-            .Where(go => go.name.Contains("TABLE_RECT_2") || go.name.Contains("TABLE_RECT_4"));
+            .Where(go => go.name.Contains("TABLE_RECT_2") || go.name.Contains("TABLE_RECT_4"))
+            .ToList();
         var zones = FindObjectsOfType<ZoneControllerPrefab>();
 
-        // Gestion des tables
+        Debug.Log($"Found {tables.Count} tables and {zones.Length} zones");
+
         foreach (var table in tables)
         {
             if (table.TryGetComponent<ElementDragHandler>(out var dragHandler))
@@ -59,30 +69,17 @@ public class SwitchModeManager : MonoBehaviour
             if (table.TryGetComponent<TableSliceHandler>(out var sliceHandler))
                 sliceHandler.enabled = showElementPanels;
 
-            // UI Hierarchy sorting
             if (showElementPanels)
-            {
                 table.transform.SetAsLastSibling();
-            }
             else
-            {
                 table.transform.SetAsFirstSibling();
-            }
         }
 
-        // Gestion des zones
         foreach (var controller in zones)
         {
             controller.enabled = showZonePanels;
-
-            if (showZonePanels)
-            {
-                controller.transform.SetAsLastSibling();
-            }
-            else
-            {
-                controller.transform.SetAsFirstSibling();
-            }
+            controller.transform.SetSiblingIndex(showZonePanels ? transform.GetSiblingIndex() + 1 : 0);
+            Debug.Log($"Zone {controller.name} controller set to {showZonePanels}");
         }
     }
 
