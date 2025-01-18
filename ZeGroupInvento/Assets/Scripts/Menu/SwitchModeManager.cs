@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Linq;
 
 public class SwitchModeManager : MonoBehaviour
 {
@@ -24,15 +25,65 @@ public class SwitchModeManager : MonoBehaviour
 
     private void Start()
     {
-        // Setup des listeners pour les boutons
         elementButtonSouth.onClick.AddListener(() => OnElementButtonClick(true));
         elementButtonNorth.onClick.AddListener(() => OnElementButtonClick(false));
         zoneButtonSouth.onClick.AddListener(() => OnZoneButtonClick(true));
         zoneButtonNorth.onClick.AddListener(() => OnZoneButtonClick(false));
 
-        // État initial
+        DisableZoneScripts();
         UpdateMenuVisibility();
         UpdateButtonVisuals();
+    }
+
+    private void DisableZoneScripts()
+    {
+        var zoneControllers = FindObjectsOfType<ZoneControllerPrefab>();
+        foreach (var controller in zoneControllers)
+        {
+            controller.enabled = false;
+        }
+    }
+
+    private void UpdateScripts(bool showElementPanels, bool showZonePanels)
+    {
+        var tables = FindObjectsOfType<GameObject>()
+            .Where(go => go.name.Contains("TABLE_RECT_2") || go.name.Contains("TABLE_RECT_4"));
+        var zones = FindObjectsOfType<ZoneControllerPrefab>();
+
+        // Gestion des tables
+        foreach (var table in tables)
+        {
+            if (table.TryGetComponent<ElementDragHandler>(out var dragHandler))
+                dragHandler.enabled = showElementPanels;
+
+            if (table.TryGetComponent<TableSliceHandler>(out var sliceHandler))
+                sliceHandler.enabled = showElementPanels;
+
+            // UI Hierarchy sorting
+            if (showElementPanels)
+            {
+                table.transform.SetAsLastSibling();
+            }
+            else
+            {
+                table.transform.SetAsFirstSibling();
+            }
+        }
+
+        // Gestion des zones
+        foreach (var controller in zones)
+        {
+            controller.enabled = showZonePanels;
+
+            if (showZonePanels)
+            {
+                controller.transform.SetAsLastSibling();
+            }
+            else
+            {
+                controller.transform.SetAsFirstSibling();
+            }
+        }
     }
 
     private void OnElementButtonClick(bool isSouth)
@@ -47,7 +98,6 @@ public class SwitchModeManager : MonoBehaviour
             isElementNorthSelected = !isElementNorthSelected;
             if (isElementNorthSelected) isZoneNorthSelected = false;
         }
-
         UpdateMenuVisibility();
         UpdateButtonVisuals();
     }
@@ -64,27 +114,25 @@ public class SwitchModeManager : MonoBehaviour
             isZoneNorthSelected = !isZoneNorthSelected;
             if (isZoneNorthSelected) isElementNorthSelected = false;
         }
-
         UpdateMenuVisibility();
         UpdateButtonVisuals();
     }
 
     private void UpdateMenuVisibility()
     {
-        // Afficher les panels Element seulement si les deux boutons Element sont sélectionnés
         bool showElementPanels = isElementSouthSelected && isElementNorthSelected;
+        bool showZonePanels = isZoneSouthSelected && isZoneNorthSelected;
+
         elementPanelSouth.SetActive(showElementPanels);
         elementPanelNorth.SetActive(showElementPanels);
-
-        // Afficher les panels Zone seulement si les deux boutons Zone sont sélectionnés
-        bool showZonePanels = isZoneSouthSelected && isZoneNorthSelected;
         zoneMenuPanelSouth.SetActive(showZonePanels);
         zoneMenuPanelNorth.SetActive(showZonePanels);
+
+        UpdateScripts(showElementPanels, showZonePanels);
     }
 
     private void UpdateButtonVisuals()
     {
-        // Mettre à jour l'apparence des boutons
         UpdateButtonColor(elementButtonSouth, isElementSouthSelected);
         UpdateButtonColor(elementButtonNorth, isElementNorthSelected);
         UpdateButtonColor(zoneButtonSouth, isZoneSouthSelected);
@@ -93,7 +141,9 @@ public class SwitchModeManager : MonoBehaviour
 
     private void UpdateButtonColor(Button button, bool isSelected)
     {
-        var image = button.GetComponent<Image>();
-        image.color = isSelected ? new Color(0.2f, 0.6f, 1f) : Color.white;
+        if (button.TryGetComponent<Image>(out var image))
+        {
+            image.color = isSelected ? new Color(0.2f, 0.6f, 1f) : Color.white;
+        }
     }
 }

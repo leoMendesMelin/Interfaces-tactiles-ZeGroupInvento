@@ -28,13 +28,14 @@ public class TableSliceHandler : MonoBehaviour
 
     void Update()
     {
-        if (elementData == null || dragHandler == null || dragHandler.IsDragging) return;
+        if (elementData == null || elementData.type != "TABLE_RECT_4") return;
 
         for (int i = 0; i < Input.touchCount; i++)
         {
             Touch touch = Input.GetTouch(i);
 
-            if (dragHandler.IsUsingTouch(touch.fingerId)) continue;
+            // On vérifie uniquement le touch courant pour le slice
+            if (touch.fingerId != sliceTouchId && isSlicing) continue;
 
             Vector2 touchPos;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, touch.position, Camera.main, out touchPos);
@@ -42,7 +43,7 @@ public class TableSliceHandler : MonoBehaviour
             switch (touch.phase)
             {
                 case TouchPhase.Began:
-                    if (!isSlicing && sliceTouchId == -1)
+                    if (!isSlicing)
                     {
                         sliceStart = touchPos;
                         isSlicing = true;
