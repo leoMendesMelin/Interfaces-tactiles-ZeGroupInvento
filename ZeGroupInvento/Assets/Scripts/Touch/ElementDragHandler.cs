@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -105,7 +106,6 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
 
     public void OnEndDrag(PointerEventData eventData)
     {
-        // Vérifications de sécurité
         if (elementData == null || webSocketManager == null || gridManager == null || roomManager == null)
         {
             Debug.LogError("Missing components in OnEndDrag");
@@ -113,7 +113,42 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
         }
 
         Vector2Int newGridPosition = gridManager.GetGridPosition(rectTransform.anchoredPosition);
-        
+
+        // On vérifie si c'est une table rectangulaire
+        if (elementData.type.StartsWith("TABLE_RECT_"))
+        {
+            // Rechercher une table à proximité (2 cases autour)
+            RoomElement nearbyTable = FindNearbyTable(newGridPosition);
+
+            if (nearbyTable != null)
+            {
+                // On peut fusionner les tables
+                int currentSize = int.Parse(elementData.type.Substring(elementData.type.Length - 1));
+                int otherSize = int.Parse(nearbyTable.type.Substring(nearbyTable.type.Length - 1));
+
+                // Vérifier si la fusion est possible (max TABLE_RECT_6)
+                if (currentSize + otherSize <= 6)
+                {
+                    // Déplacer la table draguée hors de la grille
+                    elementData.position = new Position { x = 99999, y = 99999 };
+                    elementData.isBeingEdited = false;
+
+                    // Mettre à jour le type de la table qui reçoit
+                    nearbyTable.type = $"TABLE_RECT_{currentSize + otherSize}";
+
+                    // Mettre à jour l'UI des deux tables
+                    var gridUIManager = FindObjectOfType<GridUIManager>();
+                    gridUIManager.CreateOrUpdateElementUI(elementData);
+                    gridUIManager.CreateOrUpdateElementUI(nearbyTable);
+
+                    // Envoyer la mise à jour au serveur
+                    webSocketManager.EmitElementDragEnd(elementData);
+                    return;
+                }
+            }
+        }
+
+        // Si pas de fusion, on applique simplement la nouvelle position
         elementData.position = new Position
         {
             x = newGridPosition.x,
@@ -121,6 +156,29 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
         };
         elementData.isBeingEdited = false;
         webSocketManager.EmitElementDragEnd(elementData);
-       
+    }
+
+    private RoomElement FindNearbyTable(Vector2Int position)
+    {
+        // Vérifier les 8 cases autour + la case actuelle
+        for (int dx = -2; dx <= 2; dx++)
+        {
+            for (int dy = -2; dy <= 2; dy++)
+            {
+                Vector2Int checkPosition = position + new Vector2Int(dx, dy);
+
+                RoomElement nearbyTable = roomManager.GetCurrentRoom().elements.FirstOrDefault(e =>
+                    e.id != elementData.id &&
+                    e.type.StartsWith("TABLE_RECT_") &&
+                    Mathf.RoundToInt(e.position.x) == checkPosition.x &&
+                    Mathf.RoundToInt(e.position.y) == checkPosition.y);
+
+                if (nearbyTable != null)
+                {
+                    return nearbyTable;
+                }
+            }
+        }
+        return null;
     }
 }

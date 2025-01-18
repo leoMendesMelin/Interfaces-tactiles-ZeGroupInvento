@@ -142,12 +142,43 @@ public class NotificationManager : MonoBehaviour
     private void OnAcceptClick(string requestId, RoomElement[] tables)
     {
         Debug.Log($"[NotificationManager] Accept clicked for request: {requestId}");
-        SendUpdateResponse(true, requestId, tables);
+
+        var room = RoomManager.Instance.GetCurrentRoom();
+        var socketManager = FindObjectOfType<WebSocketManager>();
+
+        foreach (var updatedTable in tables)
+        {
+            // Mettre à jour l'UI
+            RoomManager.Instance.updateUIElement(updatedTable);
+
+            // Mettre à jour la table dans la room
+            var existingTable = room.elements.FirstOrDefault(e => e.id == updatedTable.id);
+            if (existingTable != null)
+            {
+                existingTable.position = updatedTable.position;
+                existingTable.rotation = updatedTable.rotation;
+                existingTable.isBeingEdited = false;
+            }
+        }
+
+        // Envoyer la fin du drag pour propager les changements
+        if (socketManager != null)
+        {
+            socketManager.EmitElementDragEnd(tables[0]); // On envoie une table pour déclencher la mise à jour complète
+            socketManager.SendTableUpdateResponse(requestId, true, tables);
+        }
     }
 
     private void OnRejectClick(string requestId, RoomElement[] tables)
     {
         Debug.Log($"[NotificationManager] Reject clicked for request: {requestId}");
+
+        // On laisse les tables dans leur état actuel
+        foreach (var table in tables)
+        {
+            // Reset des états d'édition si nécessaire
+            table.isBeingEdited = false;
+        }
         SendUpdateResponse(false, requestId, tables);
     }
 
