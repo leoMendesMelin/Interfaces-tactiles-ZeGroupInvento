@@ -149,7 +149,11 @@ public class ZoneManager : MonoBehaviour
         // Partie ZonePrefab...
         if (zoneInstances.TryGetValue(zoneData.id, out GameObject zoneInstance))
         {
-            // Update existant...
+            var controller = zoneInstance.GetComponent<ZoneControllerPrefab>();
+            if (controller != null)
+            {
+                controller.UpdateEditingState(zoneData.isBeingEdited);
+            }
         }
         else
         {

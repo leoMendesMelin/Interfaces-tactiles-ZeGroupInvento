@@ -47,6 +47,7 @@ public class ZoneData
     public int height;
     public List<WaiterData> assignedServers;
     public List<Vector2Int> bounds;
+    public bool isBeingEdited;
 }
 [Serializable]
 public class WaiterData

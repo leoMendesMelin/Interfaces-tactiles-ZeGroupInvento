@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using System.Collections.Generic;
+using System.Collections;
 
 public class ZoneControllerPrefab : MonoBehaviour,
     IBeginDragHandler, IDragHandler, IEndDragHandler,
@@ -25,6 +26,9 @@ public class ZoneControllerPrefab : MonoBehaviour,
     private float initialPinchDistance;
     private Vector2Int initialPinchSize;
 
+    private Material blurMaterial;
+    private Image zoneImage;
+    private bool isBlurred = false;
     public void Initialize(ZoneData data, ZoneManager manager, GridManager gridManager)
     {
         if (data == null || manager == null || gridManager == null)
@@ -62,6 +66,50 @@ public class ZoneControllerPrefab : MonoBehaviour,
 
         ApplyColor();
     }
+
+    private void Awake()
+    {
+        zoneImage = GetComponent<Image>();
+        blurMaterial = new Material(Shader.Find("UI/Blur"));
+        blurMaterial.SetFloat("_Size", 2.0f);
+    }
+
+
+    public void UpdateEditingState(bool isBeingEdited)
+    {
+        if (isBeingEdited && !isBlurred)
+        {
+            zoneImage.material = blurMaterial;
+            isBlurred = true;
+            StartCoroutine(AnimateBlur(0f, 2f, 0.3f));
+        }
+        else if (!isBeingEdited && isBlurred)
+        {
+            StartCoroutine(AnimateBlur(2f, 0f, 0.3f));
+            isBlurred = false;
+        }
+    }
+
+    private IEnumerator AnimateBlur(float startSize, float endSize, float duration)
+    {
+        float elapsedTime = 0f;
+
+        while (elapsedTime < duration)
+        {
+            elapsedTime += Time.deltaTime;
+            float t = elapsedTime / duration;
+            float currentSize = Mathf.Lerp(startSize, endSize, t);
+            blurMaterial.SetFloat("_Size", currentSize);
+            yield return null;
+        }
+
+        blurMaterial.SetFloat("_Size", endSize);
+        if (endSize == 0f)
+        {
+            zoneImage.material = null;
+        }
+    }
+
 
     private void Update()
     {
