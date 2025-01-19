@@ -253,7 +253,11 @@ public class NotificationManager : MonoBehaviour
 
         if (socketManager != null)
         {
-            socketManager.EmitElementDragEnd(tables[0]);
+            // Envoyer toutes les tables au serveur
+            foreach (var table in tables)
+            {
+                socketManager.EmitElementDragEnd(table);
+            }
             socketManager.SendTableUpdateResponse(requestId, true, tables);
         }
     }
