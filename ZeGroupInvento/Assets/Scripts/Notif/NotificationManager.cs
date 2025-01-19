@@ -134,43 +134,35 @@ public class NotificationManager : MonoBehaviour
 
         foreach (var futureTable in futureTables)
         {
-            // Trouver la table existante correspondante via son ID
-            GameObject existingTable = gridUIManager.elementInstances[futureTable.id];
+            // Vérifier si la table existe déjà
+            GameObject existingTable = gridUIManager.GetExistingTableById(futureTable.id);
+
             if (existingTable != null)
             {
-                // Animer la table existante
+                // Pour les tables existantes, animer la table actuelle
                 var existingRectTransform = existingTable.GetComponent<RectTransform>();
                 StartCoroutine(AnimatePreviewScale(existingRectTransform));
-
-                // Créer la prévisualisation de la future position
-                var previewTable = CreatePreviewTable(futureTable);
-                if (previewTable != null)
-                {
-                    StartCoroutine(AnimatePreviewScale(previewTable.GetComponent<RectTransform>()));
-                    previewInstances[requestId].Add(previewTable);
-                }
             }
-        }
-    }
 
-    private void HidePreview(string requestId)
-    {
-        if (previewInstances.ContainsKey(requestId))
-        {
-            foreach (var preview in previewInstances[requestId])
+            // Dans tous les cas, créer la prévisualisation de la future position
+            var previewTable = CreatePreviewTable(futureTable);
+            if (previewTable != null)
             {
-                if (preview != null) Destroy(preview);
+                StartCoroutine(AnimatePreviewScale(previewTable.GetComponent<RectTransform>()));
+                previewInstances[requestId].Add(previewTable);
             }
-            previewInstances.Remove(requestId);
         }
-        StopAllCoroutines(); // Arrête toutes les animations
     }
-
 
     private GameObject CreatePreviewTable(RoomElement table)
     {
+        var gridUIManager = FindObjectOfType<GridUIManager>();
         var mapping = gridUIManager.prefabMappings.Find(pm => pm.elementType == table.type);
-        if (mapping == null) return null;
+        if (mapping == null)
+        {
+            Debug.LogError($"[NotificationManager] No prefab found for element type: {table.type}");
+            return null;
+        }
 
         var backgroundPanel = GameObject.Find("BackgroundPanel").GetComponent<RectTransform>();
         var previewTable = Instantiate(mapping.prefab, backgroundPanel);
@@ -186,15 +178,47 @@ public class NotificationManager : MonoBehaviour
         rectTransform.anchoredPosition = gridManager.GetWorldPosition(gridPosition);
         rectTransform.rotation = Quaternion.Euler(0, 0, table.rotation);
 
-        // Définir la couleur de prévisualisation et ajouter l'animation
+        // Configurer l'apparence de la prévisualisation
         var tableImage = previewTable.transform.Find("Tbale")?.GetComponent<Image>();
         if (tableImage != null)
         {
-            tableImage.color = new Color(0.7f, 0.7f, 0.7f, 0.6f);
+            // Utiliser une couleur différente pour distinguer les nouvelles tables des existantes
+            bool isNewTable = !gridUIManager.GetExistingTableById(table.id);
+            if (isNewTable)
+            {
+                // Couleur pour les nouvelles tables (par exemple, un vert plus clair et transparent)
+                tableImage.color = new Color(0.5f, 0.9f, 0.5f, 0.6f);
+            }
+            else
+            {
+                // Couleur pour les tables existantes déplacées
+                tableImage.color = new Color(0.7f, 0.7f, 0.7f, 0.6f);
+            }
         }
+
+        // Désactiver tous les composants qui pourraient interférer avec la prévisualisation
+        var dragHandler = previewTable.GetComponent<ElementDragHandler>();
+        if (dragHandler != null) dragHandler.enabled = false;
+
+        var sliceHandler = previewTable.GetComponent<TableSliceHandler>();
+        if (sliceHandler != null) sliceHandler.enabled = false;
 
         return previewTable;
     }
+
+    private void HidePreview(string requestId)
+    {
+        if (previewInstances.ContainsKey(requestId))
+        {
+            foreach (var preview in previewInstances[requestId])
+            {
+                if (preview != null) Destroy(preview);
+            }
+            previewInstances.Remove(requestId);
+        }
+        StopAllCoroutines(); // Arrête toutes les animations
+    }
+
 
     private IEnumerator AnimatePreviewScale(RectTransform rectTransform)
     {
@@ -241,6 +265,7 @@ public class NotificationManager : MonoBehaviour
 
         foreach (var updatedTable in tables)
         {
+            Debug.Log($"TABLE A UPDATE OU CREE: {updatedTable}");
             RoomManager.Instance.updateUIElement(updatedTable);
             var existingTable = room.elements.FirstOrDefault(e => e.id == updatedTable.id);
             if (existingTable != null)

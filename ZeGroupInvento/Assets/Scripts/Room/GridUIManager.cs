@@ -69,52 +69,69 @@ public class GridUIManager : MonoBehaviour
     }
 
     public void CreateOrUpdateElementUI(RoomElement element)
-{
-    var prefabMapping = prefabMappings.Find(pm => pm.elementType == element.type);
-    if (prefabMapping == null)
     {
-        Debug.LogError($"No prefab found for element type: {element.type}");
-        return;
-    }
+        Debug.Log($"Creating/Updating element UI: {element.id} of type {element.type}");
 
-    // On part de la position grille
-    Vector2Int gridPosition = new Vector2Int(
-        Mathf.RoundToInt(element.position.x),
-        Mathf.RoundToInt(element.position.y)
-    );
-
-    // Si l'élément existe, on le détruit
-    if (elementInstances.TryGetValue(element.id, out GameObject existingElement))
-    {
-        Destroy(existingElement);
-    }
-
-
-    // Créer un nouvel élément
-    GameObject elementObj = Instantiate(prefabMapping.prefab, backgroundPanel);
-    RectTransform rectTransform = elementObj.GetComponent<RectTransform>();
-
-    // Positionner directement sur la grille
-    rectTransform.anchoredPosition = gridManager.GetWorldPosition(gridPosition);
-
-    // Appliquer la rotation normalisée
-    float normalizedRotation = element.rotation % 360;
-    if (normalizedRotation < 0) normalizedRotation += 360;
-    rectTransform.rotation = Quaternion.Euler(0, 0, normalizedRotation);
-        ElementDragHandler dragHandler = elementObj.GetComponent<ElementDragHandler>();
-        if (dragHandler == null)
+        var prefabMapping = prefabMappings.Find(pm => pm.elementType == element.type);
+        if (prefabMapping == null)
         {
-            dragHandler = elementObj.AddComponent<ElementDragHandler>();
+            Debug.LogError($"No prefab found for element type: {element.type}");
+            return;
         }
-        dragHandler.Initialize(element);
 
+        // On part de la position grille
+        Vector2Int gridPosition = new Vector2Int(
+            Mathf.RoundToInt(element.position.x),
+            Mathf.RoundToInt(element.position.y)
+        );
+
+        // Si l'élément existe, on le détruit
+        if (elementInstances.TryGetValue(element.id, out GameObject existingElement))
+        {
+            Destroy(existingElement);
+        }
+
+        // Créer un nouvel élément
+        GameObject elementObj = Instantiate(prefabMapping.prefab, backgroundPanel);
+        RectTransform rectTransform = elementObj.GetComponent<RectTransform>();
+
+        // Positionner directement sur la grille
+        rectTransform.anchoredPosition = gridManager.GetWorldPosition(gridPosition);
+
+        // Appliquer la rotation normalisée
+        float normalizedRotation = element.rotation % 360;
+        if (normalizedRotation < 0) normalizedRotation += 360;
+        rectTransform.rotation = Quaternion.Euler(0, 0, normalizedRotation);
+
+        // Important : Configurer les gestionnaires de dragging
         if (element.type.StartsWith("TABLE_"))
         {
+            // Assurons-nous que le dragHandler est bien configuré
+            var dragHandler = elementObj.GetComponent<ElementDragHandler>();
+            if (dragHandler == null)
+            {
+                dragHandler = elementObj.AddComponent<ElementDragHandler>();
+            }
+
+            // Réinitialiser le dragHandler avec les données actualisées
+            dragHandler.Initialize(new RoomElement
+            {
+                id = element.id,
+                type = element.type,
+                position = element.position,
+                rotation = element.rotation,
+                state = element.state,
+                isBeingEdited = element.isBeingEdited
+            });
+
+            // Configuration spéciale pour les tables rectangulaires 4
             if (element.type == "TABLE_RECT_4")
             {
                 TableSliceHandler sliceHandler = elementObj.AddComponent<TableSliceHandler>();
                 StartCoroutine(InitializeSliceHandler(sliceHandler, element));
             }
+
+            // Gestion de la couleur
             Transform tTableTransform = elementObj.transform.Find("Tbale");
             if (tTableTransform != null)
             {
@@ -122,15 +139,11 @@ public class GridUIManager : MonoBehaviour
                 if (tableImage != null)
                 {
                     Color targetColor = GetColorForState(element.state);
-
-                    // Arrêter la coroutine précédente si elle existe
                     if (colorTransitionCoroutines.ContainsKey(element.id))
                     {
                         StopCoroutine(colorTransitionCoroutines[element.id]);
                         colorTransitionCoroutines.Remove(element.id);
                     }
-
-                    // Démarrer la nouvelle transition
                     Coroutine transitionCoroutine = StartCoroutine(TransitionColor(tableImage, targetColor));
                     colorTransitionCoroutines[element.id] = transitionCoroutine;
                 }
@@ -138,8 +151,10 @@ public class GridUIManager : MonoBehaviour
         }
 
         // Mettre à jour ou ajouter l'élément dans le dictionnaire
+        elementObj.name = element.id; // Important pour la recherche des tables
         elementInstances[element.id] = elementObj;
-}
+        Debug.Log($"Element UI created/updated successfully: {element.id}");
+    }
 
     private Color GetColorForState(string state)
     {

@@ -25,6 +25,7 @@ public class WebSocketManager : MonoBehaviour
             var messageData = new
             {
                 eventType = "tableUpdateResponse",
+                roomId = roomManager.GetCurrentRoom().id,
                 requestId = requestId,
                 approved = approved,
                 tables = tables

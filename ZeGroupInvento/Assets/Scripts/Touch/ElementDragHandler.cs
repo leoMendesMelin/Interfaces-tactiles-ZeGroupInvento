@@ -128,7 +128,7 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
                 int otherSize = int.Parse(nearbyTable.type.Substring(nearbyTable.type.Length - 1));
 
                 // Vérifier si la fusion est possible (max TABLE_RECT_6)
-                if (currentSize + otherSize <= 6)
+                if (currentSize + otherSize <=4)
                 {
                     // Déplacer la table draguée hors de la grille
                     elementData.position = new Position { x = 99999, y = 99999 };
@@ -144,6 +144,8 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
 
                     // Envoyer la mise à jour au serveur
                     webSocketManager.EmitElementDragEnd(elementData);
+                    webSocketManager.EmitElementDragEnd(nearbyTable);
+
                     return;
                 }
             }
@@ -166,6 +168,9 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
 
     private RoomElement FindNearbyTable(Vector2Int position)
     {
+        var gridUIManager = FindObjectOfType<GridUIManager>();
+        if (gridUIManager == null) return null;
+
         // Vérifier les 8 cases autour + la case actuelle
         for (int dx = -2; dx <= 2; dx++)
         {
@@ -173,18 +178,32 @@ public class ElementDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler
             {
                 Vector2Int checkPosition = position + new Vector2Int(dx, dy);
 
-                RoomElement nearbyTable = roomManager.GetCurrentRoom().elements.FirstOrDefault(e =>
-                    e.id != elementData.id &&
-                    e.type.StartsWith("TABLE_RECT_") &&
-                    Mathf.RoundToInt(e.position.x) == checkPosition.x &&
-                    Mathf.RoundToInt(e.position.y) == checkPosition.y);
-
-                if (nearbyTable != null)
+                // Parcourir les instances actives des tables
+                foreach (var instance in gridUIManager.elementInstances)
                 {
-                    return nearbyTable;
+                    if (instance.Key == elementData.id) continue; // Skip la table actuelle
+
+                    var instanceHandler = instance.Value.GetComponent<ElementDragHandler>();
+                    if (instanceHandler == null) continue;
+
+                    var tableData = instanceHandler.GetElementData();
+                    if (tableData != null &&
+                        tableData.type.StartsWith("TABLE_RECT_") &&
+                        Mathf.RoundToInt(tableData.position.x) == checkPosition.x &&
+                        Mathf.RoundToInt(tableData.position.y) == checkPosition.y)
+                    {
+                        Debug.Log($"Found nearby table: {tableData.id} of type {tableData.type}");
+                        return tableData;
+                    }
                 }
             }
         }
         return null;
+    }
+
+    // Ajouter cette méthode pour accéder aux données de l'élément
+    public RoomElement GetElementData()
+    {
+        return elementData;
     }
 }
